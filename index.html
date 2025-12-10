@@ -1,0 +1,215 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="stylesheet" href="styles.css">
+    <title>AI Chat Assistant</title>
+</head>
+<body>
+    <script src="script/multiplayer.js"></script>
+    <script src="script/main.js"></script>
+    <!-- Page 1: Landing Page -->
+    <div class="landing-page" id="landingPage">
+        <div class="landing-content">
+            <div class="landing-icon">
+                <svg width="80" height="80" viewBox="0 0 80 80" fill="none">
+                    <circle cx="40" cy="40" r="38" stroke="#0a84ff" stroke-width="4"/>
+                    <path d="M25 40 L35 50 L55 30" stroke="#0a84ff" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/>
+                </svg>
+            </div>
+            <h1 class="landing-title">Not Quiz Planet</h1>
+            <p class="landing-subtitle">This is not quiz planet</p>
+            
+            <div class="button-container">
+                <button class="mode-button" onclick="goToModeSelection('singleplayer')">
+                    <div class="button-icon">👤</div>
+                    <div class="button-text">
+                        <div class="button-title">Singleplayer Mode</div>
+                        <div class="button-desc">Play solo </div>
+                    </div>
+                </button>
+                
+                <button class="mode-button" onclick="goToModeSelection('multiplayer')">
+                    <div class="button-icon">👥</div>
+                    <div class="button-text">
+                        <div class="button-title">Multiplayer Mode</div>
+                        <div class="button-desc">Play with other people</div>
+                    </div>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Page 2: Subject Selection -->
+    <div class="subject-page" id="subjectPage" style="display: none;">
+        <div class="subject-content">
+            <button class="back-button-top" onclick="goBackToLanding()">
+                <svg width="20" height="20" viewBox="0 0 20 20" fill="white">
+                    <path d="M12 16L6 10L12 4" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                </svg>
+            </button>
+            
+            <h2 class="subject-title">Choose a Subject</h2>
+            <p class="subject-subtitle" id="modeSubtitle">Select a topic to begin</p>
+            
+            <div class="subject-grid">
+                <button class="subject-card" onclick="startChat('History')">
+                    <div class="subject-icon">📚</div>
+                    <div class="subject-name">History</div>
+                </button>
+                
+                <button class="subject-card" onclick="startChat('Science')">
+                    <div class="subject-icon">🔬</div>
+                    <div class="subject-name">Science</div>
+                </button>
+                
+                <button class="subject-card" onclick="startChat('Math')">
+                    <div class="subject-icon">🔢</div>
+                    <div class="subject-name">Math</div>
+                </button>
+                
+                <button class="subject-card" onclick="startChat('Geography')">
+                    <div class="subject-icon">🌍</div>
+                    <div class="subject-name">Geography</div>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Page 2.5: Multiplayer Mode Selection -->
+    <div class="multiplayer-page" id="multiplayerPage" style="display: none;">
+        <div class="multiplayer-content">
+            <button class="back-button-top" onclick="goBackToLanding()">
+                <svg width="20" height="20" viewBox="0 0 20 20" fill="white">
+                    <path d="M12 16L6 10L12 4" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                </svg>
+            </button>
+            
+            <h2 class="multiplayer-title">Multiplayer Mode</h2>
+            <p class="multiplayer-subtitle">Choose how to play</p>
+            
+            <div class="button-container">
+                <button class="mode-button" onclick="goToRoomSetup('collab')">
+                    <div class="button-icon">🤝</div>
+                    <div class="button-text">
+                        <div class="button-title">Collab Mode</div>
+                        <div class="button-desc">Work together with friends</div>
+                    </div>
+                </button>
+                
+                <button class="mode-button" onclick="goToRoomSetup('compete')">
+                    <div class="button-icon">⚔️</div>
+                    <div class="button-text">
+                        <div class="button-title">Compete Mode</div>
+                        <div class="button-desc">Challenge others to win</div>
+                    </div>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Page 2.6: Multiplayer Room Setup -->
+    <div class="room-setup-page" id="roomSetupPage" style="display: none;">
+        <div class="room-setup-content">
+            <button class="back-button-top" onclick="goBackToMultiplayerMode()">
+                <svg width="20" height="20" viewBox="0 0 20 20" fill="white">
+                    <path d="M12 16L6 10L12 4" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                </svg>
+            </button>
+            
+            <h2 class="room-title">Room Setup</h2>
+            <p class="room-subtitle" id="roomModeSubtitle">Create or join a room</p>
+            
+            <div class="room-form">
+                <input type="text" id="playerNameInput" placeholder="Your Name" maxlength="20" />
+                
+                <div class="button-container">
+                    <button class="mode-button" onclick="createRoom()">
+                        <div class="button-icon">➕</div>
+                        <div class="button-text">
+                            <div class="button-title">Create Room</div>
+                            <div class="button-desc">Start a new game</div>
+                        </div>
+                    </button>
+                    
+                    <div class="join-room-section">
+                        <input type="text" id="roomCodeInput" placeholder="Room Code" maxlength="6" style="text-transform: uppercase;" />
+                        <button class="mode-button" onclick="joinRoom()">
+                            <div class="button-icon">🚪</div>
+                            <div class="button-text">
+                                <div class="button-title">Join Room</div>
+                                <div class="button-desc">Enter a friend's game</div>
+                            </div>
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Page 2.7: Multiplayer Waiting Room -->
+    <div class="waiting-room-page" id="waitingRoomPage" style="display: none;">
+        <div class="waiting-content">
+            <h2 class="waiting-title">Choose Subject</h2>
+            <div class="room-code-display">
+                <p>Room Code:</p>
+                <h1 id="displayRoomCode">------</h1>
+                <p class="room-hint">Share this code with friends</p>
+            </div>
+            
+            <div class="subject-grid">
+                <button class="subject-card" onclick="selectRoomSubject('History')">
+                    <div class="subject-icon">📚</div>
+                    <div class="subject-name">History</div>
+                </button>
+                
+                <button class="subject-card" onclick="selectRoomSubject('Science')">
+                    <div class="subject-icon">🔬</div>
+                    <div class="subject-name">Science</div>
+                </button>
+                
+                <button class="subject-card" onclick="selectRoomSubject('Math')">
+                    <div class="subject-icon">🔢</div>
+                    <div class="subject-name">Math</div>
+                </button>
+                
+                <button class="subject-card" onclick="selectRoomSubject('Geography')">
+                    <div class="subject-icon">🌍</div>
+                    <div class="subject-name">Geography</div>
+                </button>
+            </div>
+            
+            <div class="players-list" id="playersList">
+                <h3>Players:</h3>
+                <div id="playersContainer"></div>
+            </div>
+            
+            <button class="start-game-btn" onclick="startMultiplayerGame()">Start Game</button>
+        </div>
+    </div>
+
+    <!-- Page 3: Chat Page -->
+    <div class="chat-container" id="chatContainer" style="display: none;">
+        <div class="chat-header">
+            <div>
+                <h1 id="chatTitle">AI Chat Assistant</h1>
+                <p id="chatSubtitle">Powered by Llama 3.2 (Free)</p>
+            </div>
+        </div>
+        <div class="timer-container" id="timerContainer" style="display: none;">
+            <div class="timer-label">Time Remaining: <span id="timerText">30s</span></div>
+            <div class="timer-bar">
+                <div class="timer-fill" id="timerFill"></div>
+            </div>
+        </div>
+        <div class="chat-messages" id="chatMessages">
+            <div class="message ai-message">
+                <div class="message-content">
+                    Hello! I'm your AI assistant. How can I help you today?
+                </div>
+            </div>
+        </div>
+    </div>
+</body>
+</html>
