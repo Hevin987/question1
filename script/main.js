@@ -71,7 +71,8 @@ function startChat(subject) {
     } format.`;
     
     // Send the preset question to AI
-    fetch('http://localhost:3000/chat', {
+    const apiUrl = window.location.origin + '/chat';
+    fetch(apiUrl, {
         method: 'POST',
         headers: {
             'Content-Type': 'application/json',
@@ -600,7 +601,8 @@ function handleAnswerSelection(selectedRow, selectedIndex, correctAnswer, table)
                         "answer": ""
                         } format.`;
                 
-                fetch('http://localhost:3000/chat', {
+                const apiUrl = window.location.origin + '/chat';
+                fetch(apiUrl, {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
