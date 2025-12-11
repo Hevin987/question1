@@ -41,7 +41,9 @@ function initializeSocket() {
 }
 
 function connectSocket() {
-    socket = io('http://localhost:3000');
+    // Auto-detect server URL (works locally and in production)
+    const serverUrl = window.location.origin;
+    socket = io(serverUrl);
     
     socket.on('roomCreated', ({ roomCode, playerName: pName }) => {
         currentRoomCode = roomCode;
