@@ -138,9 +138,6 @@ body {
 
 /* Page 2.5: Multiplayer Mode Selection Styles */
 .multiplayer-page {
-    width: 100%;
-    max-width: 430px;
-    height: 100vh;
     background: linear-gradient(135deg, #1a1a2e 0%, #0f0f1e 100%);
     display: flex;
     justify-content: center;
@@ -278,9 +275,6 @@ body {
 
 /* Page 3: Chat Container Styles */
 .chat-container {
-    width: 100%;
-    max-width: 430px;
-    height: 100vh;
     background: #000;
     display: flex;
     flex-direction: column;
@@ -703,9 +697,6 @@ body {
 
 /* Room Setup Page Styles */
 .room-setup-page {
-    width: 100%;
-    max-width: 430px;
-    height: 100vh;
     background: linear-gradient(135deg, #1a1a2e 0%, #0f0f1e 100%);
     display: flex;
     justify-content: center;
@@ -761,9 +752,6 @@ body {
 
 /* Waiting Room Styles */
 .waiting-room-page {
-    width: 100%;
-    max-width: 430px;
-    height: 100vh;
     background: linear-gradient(135deg, #1a1a2e 0%, #0f0f1e 100%);
     display: flex;
     justify-content: center;
