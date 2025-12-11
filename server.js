@@ -443,8 +443,8 @@ io.on('connection', (socket) => {
     });
 });
 
-httpServer.listen(PORT, () => {
-    console.log(`Server running on http://localhost:${PORT}`);
+httpServer.listen(PORT, '0.0.0.0', () => {
+    console.log(`Server running on port ${PORT}`);
     console.log('Using FREE Hugging Face AI - No credit card required!');
     console.log('WebSocket server ready for multiplayer!');
 });
