@@ -150,6 +150,11 @@
 
     <!-- Page 2.7: Multiplayer Waiting Room -->
     <div class="waiting-room-page" id="waitingRoomPage" style="display: none;">
+        <button class="back-button-top" onclick="goBackToMultiplayerMode()">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2">
+                <path d="M19 12H5M12 19l-7-7 7-7"/>
+            </svg>
+        </button>
         <div class="waiting-content">
             <h2 class="waiting-title">Choose Subject</h2>
             <div class="room-code-display">
@@ -195,6 +200,69 @@
             <h2 class="score-title">Round Complete!</h2>
             <div id="scoreboardContainer" class="scoreboard-container"></div>
             <button class="continue-score-btn" onclick="continueFromScore()">Next Question</button>
+        </div>
+    </div>
+
+    <!-- Level Progress Screen -->
+    <div class="level-progress-page" id="levelProgressPage" style="display: none;">
+        <div class="level-progress-content">
+            <h2 class="level-title">Level Progress</h2>
+            <p class="level-subtitle" id="levelRoomCode">Room: ------</p>
+            
+            <div class="level-container">
+                <div class="level-scores">
+                    <div class="level-row" data-level="0">
+                        <div class="level-item">100</div>
+                        <div class="level-indicator yellow"></div>
+                    </div>
+                    <div class="level-row" data-level="1">
+                        <div class="level-item">1,000</div>
+                        <div class="level-indicator yellow"></div>
+                    </div>
+                    <div class="level-row" data-level="2">
+                        <div class="level-item">2,000</div>
+                        <div class="level-indicator yellow"></div>
+                    </div>
+                    <div class="level-row" data-level="3">
+                        <div class="level-item">4,000</div>
+                        <div class="level-indicator yellow"></div>
+                    </div>
+                    <div class="level-row" data-level="4">
+                        <div class="level-item">8,000</div>
+                        <div class="level-indicator yellow"></div>
+                    </div>
+                    <div class="level-row" data-level="5">
+                        <div class="level-item">16,000</div>
+                        <div class="level-indicator green"></div>
+                    </div>
+                    <div class="level-row" data-level="6">
+                        <div class="level-item">32,000</div>
+                        <div class="level-indicator green"></div>
+                    </div>
+                    <div class="level-row" data-level="7">
+                        <div class="level-item">64,000</div>
+                        <div class="level-indicator green"></div>
+                    </div>
+                    <div class="level-row" data-level="8">
+                        <div class="level-item">125,000</div>
+                        <div class="level-indicator green"></div>
+                    </div>
+                    <div class="level-row" data-level="9">
+                        <div class="level-item">250,000</div>
+                        <div class="level-indicator green"></div>
+                    </div>
+                    <div class="level-row" data-level="10">
+                        <div class="level-item">500,000</div>
+                        <div class="level-indicator green"></div>
+                    </div>
+                    <div class="level-row" data-level="11">
+                        <div class="level-item">1,000,000</div>
+                        <div class="level-indicator green"></div>
+                    </div>
+                </div>
+            </div>
+            
+            <button class="level-continue-btn" onclick="continueLevelScreen()">Continue</button>
         </div>
     </div>
 

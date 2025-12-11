@@ -54,7 +54,7 @@ function startChat(subject) {
     // Update chat header
     const modeText = 'Singleplayer';
     document.getElementById('chatTitle').textContent = `${subject} - ${modeText} Mode`;
-    document.getElementById('chatSubtitle').textContent = 'Powered by Llama 3.2 (Free)';
+    document.getElementById('chatSubtitle').textContent = 'Is it AI or not';
     
     // Clear chat
     if (!chatMessages) chatMessages = document.getElementById('chatMessages');
@@ -64,11 +64,15 @@ function startChat(subject) {
     const loadingDiv = addLoadingMessage();
     
     // Automatically send preset question based on subject
-    const presetQuestion = `Make a ${subject.toLowerCase()} question with 4 MC (Multiple Choice) options in JSON format with only {
-     "question": "...",
-    "options": ["A": "" , "B": "" , "C": "" , "D": ""],
-    "answer": ""
-    } format.`;
+    const presetQuestion = `Make a randomize ${subject.toLowerCase()} question with 4 MC (Multiple Choice) options in only xml format in <question>
+        <text></text>
+        <options> 
+            <option></option>
+            <option></option>
+            <option></option>
+            <option></option>
+        </options>
+    </question>`;
     
     // Send the preset question to AI
     const apiUrl = window.location.origin + '/chat';
@@ -85,21 +89,21 @@ function startChat(subject) {
         }
         return response.json();
     })
-    .then(data => {
+    .then(async data => {
         // Remove loading message
         loadingDiv.remove();
         
         // Add AI response (quiz only)
-        addMessage(data.response, 'ai');
+        await addMessage(data.response, 'ai');
     })
-    .catch(error => {
+    .catch(async error => {
         console.error('Error:', error);
         loadingDiv.remove();
-        addMessage('Connection error. Please start the server with "npm start".', 'ai');
+        await addMessage('Connection error. Please start the server with "npm start".', 'ai');
     });
 }
 
-function addMessage(text, type) {
+async function addMessage(text, type) {
     if (!chatMessages) chatMessages = document.getElementById('chatMessages');
     
     const messageDiv = document.createElement('div');
@@ -113,7 +117,8 @@ function addMessage(text, type) {
     
     if (result.quizData) {
         // Only show quiz table, no before/after text
-        contentDiv.appendChild(createQuizTable(result.quizData));
+        const quizTable = await createQuizTable(result.quizData);
+        contentDiv.appendChild(quizTable);
     } else {
         contentDiv.textContent = text;
     }
@@ -129,7 +134,57 @@ function addMessage(text, type) {
 
 function tryParseQuizJSON(text) {
     try {
-        // First, try to find JSON object in the text (even if it's not in code blocks)
+        // First, check for XML format
+        const xmlMatch = text.match(/<question>[\s\S]*?<\/question>/);
+        if (xmlMatch) {
+            console.log('Found XML format, parsing...');
+            const xmlText = xmlMatch[0];
+            
+            // Extract question text
+            const questionMatch = xmlText.match(/<text>([\s\S]*?)<\/text>/);
+            const question = questionMatch ? questionMatch[1].trim() : '';
+            
+            // Extract options
+            const optionsMatch = xmlText.match(/<options>([\s\S]*?)<\/options>/);
+            const options = [];
+            if (optionsMatch) {
+                const optionMatches = optionsMatch[1].matchAll(/<option>([\s\S]*?)<\/option>/g);
+                for (const match of optionMatches) {
+                    options.push(match[1].trim());
+                }
+            }
+            
+            // Extract answer if present (could be index or text)
+            const answerMatch = xmlText.match(/<answer>([\s\S]*?)<\/answer>/);
+            let answer = 0; // Default to first option
+            if (answerMatch) {
+                const answerText = answerMatch[1].trim();
+                // Check if it's a number (index)
+                if (!isNaN(answerText)) {
+                    answer = parseInt(answerText);
+                } else {
+                    // Try to find matching option
+                    const answerIndex = options.findIndex(opt => 
+                        opt.toLowerCase() === answerText.toLowerCase()
+                    );
+                    if (answerIndex >= 0) answer = answerIndex;
+                }
+            }
+            
+            if (question && options.length > 0) {
+                return {
+                    quizData: {
+                        question: question,
+                        options: options,
+                        answer: answer
+                    },
+                    beforeText: '',
+                    afterText: ''
+                };
+            }
+        }
+        
+        // Try to find JSON object in the text (even if it's not in code blocks)
         const jsonObjectMatch = text.match(/\{[\s\S]*"question"[\s\S]*\}/);
         
         if (jsonObjectMatch) {
@@ -137,6 +192,30 @@ function tryParseQuizJSON(text) {
             // Remove comments from JSON
             jsonText = jsonText.replace(/\/\*[\s\S]*?\*\//g, '');
             jsonText = jsonText.replace(/\/\/.*/g, '');
+            
+            // Fix malformed options array: ["A": "text", "B": "text"] to [{"A": "text"}, {"B": "text"}]
+            if (/"options"\s*:\s*\[\s*"[A-F]"\s*:/.test(jsonText)) {
+                console.log('Detected malformed options array format, fixing...');
+                
+                // Extract the options array
+                const optionsMatch = jsonText.match(/"options"\s*:\s*\[([^\]]+)\]/);
+                if (optionsMatch) {
+                    const originalOptions = optionsMatch[0];
+                    let fixedOptions = originalOptions;
+                    
+                    // Replace "options": ["A": with "options": [{"A":
+                    fixedOptions = fixedOptions.replace(/"options"\s*:\s*\[\s*"([A-F])"\s*:/g, '"options": [{"$1":');
+                    
+                    // Replace , "B": with }, {"B":
+                    fixedOptions = fixedOptions.replace(/,\s*"([A-F])"\s*:/g, '}, {"$1":');
+                    
+                    // Close the last object before the closing bracket ]
+                    fixedOptions = fixedOptions.replace(/("\s*)\]$/, '$1}]');
+                    
+                    jsonText = jsonText.replace(originalOptions, fixedOptions);
+                    console.log('Fixed options array format');
+                }
+            }
             
             try {
                 const data = JSON.parse(jsonText);
@@ -477,7 +556,23 @@ function tryParseQuizJSON(text) {
     return { quizData: null };
 }
 
-function createQuizTable(quizData) {
+async function findCorrectAnswerWithAI(question, options) {
+    console.log(`Verifying all options for question: "${question.substring(0, 60)}..."`);
+    
+    for (let i = 0; i < options.length; i++) {
+        const isCorrect = await verifyAnswerWithAI(question, options[i]);
+        console.log(`  Option ${i + 1} (${options[i].substring(0, 40)}...): ${isCorrect ? '✓ CORRECT' : '✗ Wrong'}`);
+        
+        if (isCorrect) {
+            return i;
+        }
+    }
+    
+    console.log('  Warning: No correct answer found, defaulting to option 0');
+    return 0; // Default to first option if none verified as correct
+}
+
+async function createQuizTable(quizData) {
     const container = document.createElement('div');
     container.className = 'quiz-container';
     
@@ -487,47 +582,95 @@ function createQuizTable(quizData) {
     questionDiv.textContent = quizData.question;
     container.appendChild(questionDiv);
     
-    // Options table
-    const table = document.createElement('table');
-    table.className = 'quiz-table';
+    // Verify correct answer with AI by checking all options
+    const verifiedCorrectAnswer = await findCorrectAnswerWithAI(quizData.question, quizData.options);
+    
+    // Options grid (now using div instead of table)
+    const grid = document.createElement('div');
+    grid.className = 'quiz-table';
     
     quizData.options.forEach((option, index) => {
-        const row = document.createElement('tr');
-        row.className = 'quiz-option';
+        const optionDiv = document.createElement('div');
+        optionDiv.className = 'quiz-option';
         
-        const numberCell = document.createElement('td');
-        numberCell.className = 'option-number';
-        numberCell.textContent = index + 1;
+        const textSpan = document.createElement('span');
+        textSpan.className = 'option-text';
+        textSpan.textContent = option;
         
-        const optionCell = document.createElement('td');
-        optionCell.className = 'option-text';
-        optionCell.textContent = option;
+        optionDiv.appendChild(textSpan);
         
-        row.appendChild(numberCell);
-        row.appendChild(optionCell);
-        
-        // Make row clickable
-        row.addEventListener('click', function() {
-            handleAnswerSelection(row, index, quizData.answer, table);
+        // Make option clickable - use verified answer
+        optionDiv.addEventListener('click', function() {
+            handleAnswerSelection(optionDiv, index, verifiedCorrectAnswer, grid, quizData.question, option);
         });
         
-        table.appendChild(row);
+        grid.appendChild(optionDiv);
     });
     
-    container.appendChild(table);
+    container.appendChild(grid);
     
     // No answer info displayed
     
     return container;
 }
-function handleAnswerSelection(selectedRow, selectedIndex, correctAnswer, table) {
+
+async function verifyAnswerWithAI(question, answer) {
+    try {
+        const prompt = `Is "${question}" answer is "${answer}". Only answer yes or no with no additional text`;
+        const apiUrl = window.location.origin + '/chat';
+        
+        const response = await fetch(apiUrl, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ message: prompt })
+        });
+        
+        const data = await response.json();
+        const aiResponse = data.response.toLowerCase().trim();
+        
+        // Check for various yes/no variations
+        const yesVariations = ['yes', 'yeah', 'yep', 'yup', 'correct', 'true', 'right', 'affirmative'];
+        const noVariations = ['no', 'nope', 'nah', 'incorrect', 'false', 'wrong', 'negative'];
+        
+        for (const variation of yesVariations) {
+            if (aiResponse.includes(variation)) {
+                return true;
+            }
+        }
+        
+        for (const variation of noVariations) {
+            if (aiResponse.includes(variation)) {
+                return false;
+            }
+        }
+        
+        // Default to false if unclear
+        return false;
+    } catch (error) {
+        console.error('Error verifying answer with AI:', error);
+        return false;
+    }
+}
+
+async function handleAnswerSelection(selectedRow, selectedIndex, correctAnswer, table, question, selectedAnswer) {
     // Prevent multiple selections
     if (table.classList.contains('answered')) return;
     
     table.classList.add('answered');
     
     const rows = table.querySelectorAll('.quiz-option');
-    const isCorrect = selectedIndex === correctAnswer;
+    
+    // Verify answer with AI
+    let isCorrect = false;
+    if (question && selectedAnswer) {
+        isCorrect = await verifyAnswerWithAI(question, selectedAnswer);
+        console.log('AI verification result:', isCorrect);
+    } else {
+        // Fallback to index comparison if AI verification not available
+        isCorrect = selectedIndex === correctAnswer;
+    }
     
     // Check if multiplayer
     const multiplayerState = window.getMultiplayerState();
@@ -610,14 +753,14 @@ function handleAnswerSelection(selectedRow, selectedIndex, correctAnswer, table)
                     body: JSON.stringify({ message: presetQuestion })
                 })
                 .then(response => response.json())
-                .then(data => {
+                .then(async data => {
                     loadingDiv.remove();
-                    addMessage(data.response, 'ai');
+                    await addMessage(data.response, 'ai');
                 })
-                .catch(error => {
+                .catch(async error => {
                     console.error('Error:', error);
                     loadingDiv.remove();
-                    addMessage('Sorry, I encountered an error. Please try again.', 'ai');
+                    await addMessage('Sorry, I encountered an error. Please try again.', 'ai');
                 });
             }
         });

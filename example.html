@@ -21,37 +21,54 @@
             align-items: center;
             justify-content: center;
         }
-        td {
+        .score-container {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
             padding: 20px;
-            font-size: 30px;
+            width: 100%;
         }
-        table {
-            margin-left: 10px;
-            margin-right: 10px;;
-            border-collapse: separate;
-            border-spacing: 50px 20px; /* Space between cells 
-            */
-            width:100%;
-            height:100%;
+        .left-scores {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            width: 75%;
+        }
+        .score-item {
+            display: flex;
+            align-items: center;
             justify-content: center;
-            font-size: calc();
+            padding: 15px;
+            margin-bottom: 10px;
+            border-radius: 50px;
             background-color: #353535a2;
-            border-radius: 10px;
-
+            color: white;
+            font-size: 24px;
         }
-        .circle-span {
-                display: table;
-                width: 100%;
-                height: 100%;
-                border-radius: 50px; /* Make it a circle */
-                background-color: #353535a2; /* Add a background color */
-                color: white; /* Style the text color */
-                margin-bottom: 5%;
-                }
-        .circle-span td {
-                width: 50%;
-                }
-                button{
+        .score-item:nth-child(1) { width: 25%; }
+        .score-item:nth-child(2) { width: 30%; }
+        .score-item:nth-child(3) { width: 35%; }
+        .score-item:nth-child(4) { width: 40%; }
+        .score-item:nth-child(5) { width: 45%; }
+        .score-item:nth-child(6) { width: 50%; }
+        .score-item:nth-child(7) { width: 55%; }
+        .score-item:nth-child(8) { width: 60%; }
+        .score-item:nth-child(9) { width: 70%; }
+        .score-item:nth-child(10) { width: 80%; }
+        .score-item:nth-child(11) { width: 90%; }
+        .score-item:nth-child(12) { width: 95%; }
+        .right-indicators {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            width: 60px;
+        }
+        .indicator {
+            width: 60px;
+            height: 55px;
+            border-radius: 10px;
+        }
+        button {
                     background-color: #0a84ff;
                     color: white;
                     border-radius: 20px;
@@ -64,37 +81,56 @@
                     align-items: center;
                     
                 }
-                button:hover{
+        button:hover {
                     background-color: #0070e0;
                 }
-                button:active{
+        button:active {
                     transform: scale(0.96);
+                }
+        .green {
+                    background-color: green;
+                }
+        .red {
+                    background-color: red;
+                }
+        .yellow {
+                    background-color: yellow;
                 }
         </style>
     <title>Document</title>
 </head>
 <body bgcolor="black">
-    <h1>Score Board</h1>
+    <h1>Level</h1>
     <br>
-    <div class="score_table">
-        <table align="center">
-            <tr class="circle-span">
-                <td>
-                    <span>Player 1</span>
-                </td>
-                <td align="right">
-                    <span>10</span>
-                </td>
-            </tr>
-            <tr class="circle-span">
-                <td>
-                    <span>Player 2</span>
-                </td>
-                <td align="right">
-                    <span>5</span>
-                </td>
-            </tr>
-        </table>
+    <div class="score-container">
+        <div class="left-scores">
+            <div class="score-item">1,000,000</div>
+            <div class="score-item">500,000</div>
+            <div class="score-item">250,000</div>
+            <div class="score-item">125,000</div>
+            <div class="score-item">64,000</div>
+            <div class="score-item">32,000</div>
+            <div class="score-item">16,000</div>
+            <div class="score-item">8,000</div>
+            <div class="score-item">4,000</div>
+            <div class="score-item">2,000</div>
+            <div class="score-item">1,000</div>
+            <div class="score-item">100</div>
+        </div>
+        <div class="right-indicators">
+            <div class="indicator yellow"></div>
+            <div class="indicator yellow"></div>
+            <div class="indicator yellow"></div>
+            <div class="indicator yellow"></div>
+            <div class="indicator yellow"></div>
+            <div class="indicator green"></div>
+            <div class="indicator green"></div>
+            <div class="indicator green"></div>
+            <div class="indicator green"></div>
+            <div class="indicator green"></div>
+            <div class="indicator green"></div>
+            <div class="indicator green"></div>
+        </div>
     </div>
     <div align="center" style="margin-top: 30px;">
     <button align="center">Continue</button>

@@ -20,7 +20,9 @@ body {
 .chat-container,
 .multiplayer-page,
 .room-setup-page,
-.waiting-room-page {
+.waiting-room-page,
+.score-screen,
+.level-progress-page {
     width: 100%;
     max-width: min(430px, 56.25vh); /* 9:16 ratio: 16/9 = 1.778, so width = height * (9/16) = height * 0.5625 */
     aspect-ratio: 9 / 16;
@@ -171,7 +173,7 @@ body {
 
 .back-button-top {
     position: absolute;
-    top: 60px;
+    top: 20px;
     left: 20px;
     width: 40px;
     height: 40px;
@@ -183,6 +185,7 @@ body {
     justify-content: center;
     border-radius: 50%;
     transition: background 0.2s;
+    z-index: 10;
 }
 
 .back-button-top:hover {
@@ -397,7 +400,6 @@ body {
 }
 
 .message-content {
-    max-width: 75%;
     padding: 12px 16px;
     border-radius: 20px;
     word-wrap: break-word;
@@ -543,8 +545,9 @@ body {
 
 /* Quiz table styles */
 .quiz-container {
-    width: 100%;
-    margin: 10px 0;
+    width: 90%;
+    max-width: 90%;
+    margin: 10px auto;
 }
 
 .quiz-question {
@@ -553,12 +556,14 @@ body {
     margin-bottom: 12px;
     color: white;
     line-height: 1.4;
+    width: 100%;
 }
 
 .quiz-table {
     width: 100%;
-    border-collapse: separate;
-    border-spacing: 0 6px;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
 }
 
 .quiz-option {
@@ -566,6 +571,10 @@ body {
     transition: all 0.2s ease;
     background: #2c2c2e;
     border-radius: 12px;
+    display: flex;
+    align-items: center;
+    padding: 14px;
+    min-height: 60px;
 }
 
 .quiz-option:hover:not(.correct):not(.incorrect):not(.selected) {
@@ -577,23 +586,20 @@ body {
     transform: scale(0.98);
 }
 
-.quiz-option td {
-    padding: 14px;
-}
-
 .option-number {
     width: 36px;
+    min-width: 36px;
     font-weight: 700;
     text-align: center;
     color: #0a84ff;
     font-size: 16px;
-    border-radius: 12px 0 0 12px;
+    margin-right: 12px;
 }
 
 .option-text {
     color: white;
     font-size: 16px;
-    border-radius: 0 12px 12px 0;
+    flex: 1;
 }
 
 .quiz-option.correct {
@@ -690,7 +696,6 @@ body {
 }
 
 .ai-message .message-content:has(.quiz-container) {
-    max-width: 90%;
     background: #1c1c1e;
     padding: 16px;
 }
@@ -757,6 +762,7 @@ body {
     justify-content: center;
     align-items: center;
     padding: 40px 30px;
+    position: relative;
 }
 
 .waiting-content {
@@ -875,10 +881,10 @@ body {
     justify-content: center;
     align-items: center;
     padding: 60px 30px;
-    position: absolute;
-    top: 0;
+    position: fixed;
+    top: 50%;
     left: 50%;
-    transform: translateX(-50%);
+    transform: translate(-50%, -50%);
     z-index: 1000;
 }
 
@@ -985,5 +991,148 @@ body {
 }
 
 .continue-score-btn:active {
+    transform: scale(0.98);
+}
+/* Level Progress Screen Styles */
+.level-progress-page {
+    background: linear-gradient(135deg, #1a1a2e 0%, #0f0f1e 100%);
+    display: flex;
+    flex-direction: column;
+    padding: 20px 15px;
+    overflow-y: auto;
+}
+
+.level-progress-content {
+    width: 100%;
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+}
+
+.level-title {
+    font-size: 24px;
+    font-weight: 700;
+    color: white;
+    text-align: center;
+    margin-bottom: 5px;
+}
+
+.level-subtitle {
+    font-size: 12px;
+    color: #8e8e93;
+    text-align: center;
+    margin-bottom: 15px;
+}
+
+.level-container {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    margin-bottom: 12px;
+    position: relative;
+}
+
+.level-scores {
+    display: flex;
+    flex-direction: column-reverse;
+    gap: 6px;
+}
+
+.level-row {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    position: relative;
+    transition: all 0.3s ease;
+}
+
+.level-item {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 8px 14px;
+    background: rgba(44, 44, 46, 0.8);
+    backdrop-filter: blur(10px);
+    color: white;
+    font-size: 16px;
+    font-weight: 600;
+    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.3);
+    transition: all 0.3s ease;
+    border: 2px solid transparent;
+    clip-path: polygon(5% 0%, 95% 0%, 100% 100%, 0% 100%);
+}
+
+.level-row[data-level="0"] .level-item { width: 95%; }
+.level-row[data-level="1"] .level-item { width: 90%; }
+.level-row[data-level="2"] .level-item { width: 80%; }
+.level-row[data-level="3"] .level-item { width: 70%; }
+.level-row[data-level="4"] .level-item { width: 60%; }
+.level-row[data-level="5"] .level-item { width: 55%; }
+.level-row[data-level="6"] .level-item { width: 50%; }
+.level-row[data-level="7"] .level-item { width: 45%; }
+.level-row[data-level="8"] .level-item { width: 40%; }
+.level-row[data-level="9"] .level-item { width: 35%; }
+.level-row[data-level="10"] .level-item { width: 30%; }
+.level-row[data-level="11"] .level-item { width: 25%; }
+
+.level-indicator {
+    position: absolute;
+    right: 20px;
+    width: 40px;
+    height: 40px;
+    border-radius: 10px;
+    flex-shrink: 0;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
+    transition: background 0.3s ease, box-shadow 0.3s ease;
+}
+
+.level-indicator.yellow {
+    background: linear-gradient(135deg, #ffd60a 0%, #ffaa00 100%);
+}
+
+.level-indicator.green {
+    background: linear-gradient(135deg, #32d74b 0%, #28a745 100%);
+}
+
+.level-indicator.red {
+    background: linear-gradient(135deg, #ff453a 0%, #dc3545 100%);
+}
+
+.level-row.active .level-item {
+    background: linear-gradient(135deg, rgba(10, 132, 255, 0.9), rgba(0, 102, 204, 0.9));
+    border-color: rgba(10, 132, 255, 0.8);
+    box-shadow: 0 8px 30px rgba(10, 132, 255, 0.5);
+    transform: scale(1.05);
+}
+
+.level-row.active .level-indicator {
+    box-shadow: 0 8px 24px rgba(255, 215, 0, 0.6);
+    transform: scale(1.1);
+}
+
+.level-continue-btn {
+    width: 100%;
+    padding: 14px;
+    background: linear-gradient(135deg, #0a84ff, #0066cc);
+    color: white;
+    border: none;
+    border-radius: 20px;
+    font-size: 16px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    box-shadow: 0 8px 24px rgba(10, 132, 255, 0.4);
+    text-transform: uppercase;
+    letter-spacing: 1px;
+}
+
+.level-continue-btn:hover {
+    background: linear-gradient(135deg, #0070e0, #0055aa);
+    transform: translateY(-2px);
+    box-shadow: 0 12px 32px rgba(10, 132, 255, 0.5);
+}
+
+.level-continue-btn:active {
     transform: scale(0.98);
 }
