@@ -218,7 +218,7 @@ function createRoom() {
     // Initialize socket and wait for connection
     if (!socket || !socket.connected) {
         initializeSocket();
-        // Wait a moment for socket to connect
+        // Wait longer for socket to connect (especially for remote servers)
         setTimeout(() => {
             if (socket && socket.connected) {
                 socket.emit('createRoom', { 
@@ -227,9 +227,20 @@ function createRoom() {
                     subject: '' // Subject will be selected later
                 });
             } else {
-                alert('Failed to connect to server. Please try again.');
+                // Try one more time after additional delay
+                setTimeout(() => {
+                    if (socket && socket.connected) {
+                        socket.emit('createRoom', { 
+                            playerName: name, 
+                            mode: multiplayerType, 
+                            subject: ''
+                        });
+                    } else {
+                        alert('Failed to connect to server. Please try again.');
+                    }
+                }, 1000);
             }
-        }, 1000);
+        }, 2000);
     } else {
         socket.emit('createRoom', { 
             playerName: name, 
@@ -261,15 +272,23 @@ function joinRoom() {
     // Initialize socket and wait for connection
     if (!socket || !socket.connected) {
         initializeSocket();
-        // Wait a moment for socket to connect
+        // Wait longer for socket to connect (especially for remote servers)
         setTimeout(() => {
             if (socket && socket.connected) {
                 socket.emit('joinRoom', { roomCode: code, playerName: name });
                 showWaitingRoom(code);
             } else {
-                alert('Failed to connect to server. Please try again.');
+                // Try one more time after additional delay
+                setTimeout(() => {
+                    if (socket && socket.connected) {
+                        socket.emit('joinRoom', { roomCode: code, playerName: name });
+                        showWaitingRoom(code);
+                    } else {
+                        alert('Failed to connect to server. Please try again.');
+                    }
+                }, 1000);
             }
-        }, 1000);
+        }, 2000);
     } else {
         socket.emit('joinRoom', { roomCode: code, playerName: name });
         showWaitingRoom(code);
