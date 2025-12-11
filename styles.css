@@ -7,18 +7,29 @@
 body {
     font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Helvetica', 'Arial', sans-serif;
     background: #000;
-    height: 100vh;
+    min-height: 100vh;
     display: flex;
     justify-content: center;
     align-items: center;
     padding: 0;
 }
 
+/* 9:16 aspect ratio container */
+.landing-page,
+.subject-page,
+.chat-container,
+.multiplayer-page,
+.room-setup-page,
+.waiting-room-page {
+    width: 100%;
+    max-width: min(430px, 56.25vh); /* 9:16 ratio: 16/9 = 1.778, so width = height * (9/16) = height * 0.5625 */
+    aspect-ratio: 9 / 16;
+    max-height: 100vh;
+    overflow: hidden;
+}
+
 /* Landing Page Styles */
 .landing-page {
-    width: 100%;
-    max-width: 430px;
-    height: 100vh;
     background: linear-gradient(135deg, #1a1a2e 0%, #0f0f1e 100%);
     display: flex;
     justify-content: center;
@@ -117,9 +128,6 @@ body {
 
 /* Page 2: Subject Selection Styles */
 .subject-page {
-    width: 100%;
-    max-width: 430px;
-    height: 100vh;
     background: linear-gradient(135deg, #1a1a2e 0%, #0f0f1e 100%);
     display: flex;
     justify-content: center;
