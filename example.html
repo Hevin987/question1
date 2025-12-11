@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <style>
+        body {
+            width: 720px;
+            height: 1080px;
+            margin: 0;
+            padding: 0;
+            color: white;
+            align-items: center;
+            justify-content: center;
+        }
+        h1 {
+            text-align: center;
+            margin-bottom: 20px;
+            display: flex;
+            font-size:50px;
+            align-items: center;
+            justify-content: center;
+        }
+        td {
+            padding: 20px;
+            font-size: 30px;
+        }
+        table {
+            margin-left: 10px;
+            margin-right: 10px;;
+            border-collapse: separate;
+            border-spacing: 50px 20px; /* Space between cells 
+            */
+            width:100%;
+            height:100%;
+            justify-content: center;
+            font-size: calc();
+            background-color: #353535a2;
+            border-radius: 10px;
+
+        }
+        .circle-span {
+                display: table;
+                width: 100%;
+                height: 100%;
+                border-radius: 50px; /* Make it a circle */
+                background-color: #353535a2; /* Add a background color */
+                color: white; /* Style the text color */
+                margin-bottom: 5%;
+                }
+        .circle-span td {
+                width: 50%;
+                }
+                button{
+                    background-color: #0a84ff;
+                    color: white;
+                    border-radius: 20px;
+                    width: 30%;
+                    height: 50px;
+                    font-size: 20px;
+                    justify-content: center;
+                    align-self: center;
+                    align-content: center; 
+                    align-items: center;
+                    
+                }
+                button:hover{
+                    background-color: #0070e0;
+                }
+                button:active{
+                    transform: scale(0.96);
+                }
+        </style>
+    <title>Document</title>
+</head>
+<body bgcolor="black">
+    <h1>Score Board</h1>
+    <br>
+    <div class="score_table">
+        <table align="center">
+            <tr class="circle-span">
+                <td>
+                    <span>Player 1</span>
+                </td>
+                <td align="right">
+                    <span>10</span>
+                </td>
+            </tr>
+            <tr class="circle-span">
+                <td>
+                    <span>Player 2</span>
+                </td>
+                <td align="right">
+                    <span>5</span>
+                </td>
+            </tr>
+        </table>
+    </div>
+    <div align="center" style="margin-top: 30px;">
+    <button align="center">Continue</button>
+    </div>
+</body>
+</html>

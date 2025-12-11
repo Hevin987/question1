@@ -72,17 +72,17 @@ body {
 .button-container {
     display: flex;
     flex-direction: column;
-    gap: 16px;
+    gap: 12px;
 }
 
 .mode-button {
     background: #1c1c1e;
     border: 2px solid #2c2c2e;
-    border-radius: 16px;
-    padding: 20px;
+    border-radius: 14px;
+    padding: 16px;
     display: flex;
     align-items: center;
-    gap: 16px;
+    gap: 12px;
     cursor: pointer;
     transition: all 0.3s ease;
     text-align: left;
@@ -99,14 +99,14 @@ body {
 }
 
 .button-icon {
-    font-size: 36px;
-    width: 60px;
-    height: 60px;
+    font-size: 28px;
+    width: 48px;
+    height: 48px;
     display: flex;
     align-items: center;
     justify-content: center;
     background: #2c2c2e;
-    border-radius: 12px;
+    border-radius: 10px;
     flex-shrink: 0;
 }
 
@@ -115,14 +115,14 @@ body {
 }
 
 .button-title {
-    font-size: 18px;
+    font-size: 16px;
     font-weight: 600;
     color: white;
-    margin-bottom: 4px;
+    margin-bottom: 2px;
 }
 
 .button-desc {
-    font-size: 14px;
+    font-size: 13px;
     color: #8e8e93;
 }
 
@@ -215,14 +215,14 @@ body {
 .subject-card {
     background: #1c1c1e;
     border: 2px solid #2c2c2e;
-    border-radius: 20px;
-    padding: 30px 20px;
+    border-radius: 16px;
+    padding: 20px 16px;
     cursor: pointer;
     transition: all 0.3s ease;
     display: flex;
     flex-direction: column;
     align-items: center;
-    gap: 12px;
+    gap: 10px;
 }
 
 .subject-card:hover {
@@ -257,14 +257,14 @@ body {
 }
 
 .subject-icon {
-    font-size: 48px;
-    width: 80px;
-    height: 80px;
+    font-size: 40px;
+    width: 64px;
+    height: 64px;
     display: flex;
     align-items: center;
     justify-content: center;
     background: #2c2c2e;
-    border-radius: 16px;
+    border-radius: 14px;
 }
 
 .subject-name {
@@ -866,4 +866,124 @@ body {
     color: #8e8e93;
     font-size: 14px;
     margin: 10px 0;
+}
+
+/* Score Screen Styles */
+.score-screen {
+    background: linear-gradient(135deg, #1a1a2e 0%, #0f0f1e 100%);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    padding: 60px 30px;
+    position: absolute;
+    top: 0;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 1000;
+}
+
+.score-content {
+    text-align: center;
+    width: 100%;
+    max-width: 100%;
+}
+
+.score-title {
+    font-size: 42px;
+    font-weight: 700;
+    color: white;
+    margin-bottom: 50px;
+    text-shadow: 0 4px 20px rgba(10, 132, 255, 0.3);
+}
+
+.scoreboard-container {
+    width: 100%;
+    margin-bottom: 40px;
+}
+
+.scoreboard-container h3 {
+    color: #8e8e93;
+    font-size: 14px;
+    font-weight: 500;
+    margin-bottom: 24px;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+}
+
+.score-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 24px 28px;
+    margin: 16px 0;
+    background: rgba(44, 44, 46, 0.6);
+    backdrop-filter: blur(10px);
+    border-radius: 24px;
+    transition: all 0.3s ease;
+    border: 2px solid transparent;
+}
+
+.score-item:hover {
+    transform: translateY(-2px);
+    background: rgba(44, 44, 46, 0.8);
+}
+
+.score-item.current-player {
+    background: linear-gradient(135deg, rgba(10, 132, 255, 0.9), rgba(0, 102, 204, 0.9));
+    transform: scale(1.02);
+    border: 2px solid rgba(10, 132, 255, 0.5);
+    box-shadow: 0 8px 30px rgba(10, 132, 255, 0.4);
+}
+
+.score-player-name {
+    font-size: 20px;
+    font-weight: 600;
+    color: white;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.score-rank {
+    font-size: 32px;
+    margin-right: 4px;
+    filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.3));
+}
+
+.score-value {
+    font-size: 24px;
+    font-weight: 700;
+    color: #0a84ff;
+    text-shadow: 0 2px 8px rgba(10, 132, 255, 0.5);
+}
+
+.score-item.current-player .score-value {
+    color: white;
+    text-shadow: 0 2px 8px rgba(255, 255, 255, 0.5);
+}
+
+.continue-score-btn {
+    width: 100%;
+    padding: 20px;
+    background: linear-gradient(135deg, #0a84ff, #0066cc);
+    color: white;
+    border: none;
+    border-radius: 20px;
+    font-size: 20px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    box-shadow: 0 8px 24px rgba(10, 132, 255, 0.4);
+    text-transform: uppercase;
+    letter-spacing: 1px;
+}
+
+.continue-score-btn:hover {
+    background: linear-gradient(135deg, #0070e0, #0055aa);
+    transform: translateY(-2px);
+    box-shadow: 0 12px 32px rgba(10, 132, 255, 0.5);
+}
+
+.continue-score-btn:active {
+    transform: scale(0.98);
 }
