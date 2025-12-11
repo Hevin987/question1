@@ -123,8 +123,8 @@ function connectSocket() {
         }
     });
     
-    socket.on('revealAnswers', ({ correctAnswer, playerAnswers }) => {
-        console.log('revealAnswers received:', { correctAnswer, playerAnswers });
+    socket.on('revealAnswers', ({ correctAnswer, playerAnswers, scores }) => {
+        console.log('revealAnswers received:', { correctAnswer, playerAnswers, scores });
         stopTimer(); // Stop the timer when answers are revealed
         // Find the current quiz table
         const quizTables = document.querySelectorAll('.quiz-table');
@@ -164,6 +164,20 @@ function connectSocket() {
             }
             if (wrongPlayers.length > 0) {
                 addSystemMessage(`✗ Wrong: ${wrongPlayers.join(', ')}`);
+            }
+            
+            // Show score if in compete mode
+            if (multiplayerType === 'compete' && scores && scores.length > 0) {
+                // Sort by score descending
+                const sortedScores = scores.sort((a, b) => b.score - a.score);
+                let scoreMessage = '📊 Scores: ';
+                scoreMessage += sortedScores.map(s => `${s.name}: ${s.score}`).join(' | ');
+                addSystemMessage(scoreMessage);
+                
+                // Show score screen
+                setTimeout(() => {
+                    showScoreScreen(sortedScores);
+                }, 1500);
             }
             
             // Add action buttons after reveal
@@ -512,6 +526,69 @@ function stopTimer() {
     }
 }
 
+function showScoreScreen(scores) {
+    const scoreScreen = document.getElementById('scoreScreen');
+    const scoreboardContainer = document.getElementById('scoreboardContainer');
+    
+    // Clear previous scores
+    scoreboardContainer.innerHTML = '';
+    
+    // Add title
+    const title = document.createElement('h3');
+    title.style.color = 'white';
+    title.style.marginBottom = '16px';
+    title.style.fontSize = '18px';
+    title.textContent = 'Current Standings';
+    scoreboardContainer.appendChild(title);
+    
+    // Add each player's score
+    scores.forEach((player, index) => {
+        const scoreItem = document.createElement('div');
+        scoreItem.className = 'score-item';
+        
+        // Highlight current player
+        if (player.name === playerName) {
+            scoreItem.classList.add('current-player');
+        }
+        
+        const nameDiv = document.createElement('div');
+        nameDiv.className = 'score-player-name';
+        
+        // Add rank emoji
+        const rank = ['🥇', '🥈', '🥉'][index] || '🏅';
+        const rankSpan = document.createElement('span');
+        rankSpan.className = 'score-rank';
+        rankSpan.textContent = rank;
+        
+        const nameSpan = document.createElement('span');
+        nameSpan.textContent = player.name;
+        
+        nameDiv.appendChild(rankSpan);
+        nameDiv.appendChild(nameSpan);
+        
+        const scoreDiv = document.createElement('div');
+        scoreDiv.className = 'score-value';
+        scoreDiv.textContent = `${player.score} pts`;
+        
+        scoreItem.appendChild(nameDiv);
+        scoreItem.appendChild(scoreDiv);
+        scoreboardContainer.appendChild(scoreItem);
+    });
+    
+    // Show score screen
+    scoreScreen.style.display = 'flex';
+}
+
+function continueFromScore() {
+    const scoreScreen = document.getElementById('scoreScreen');
+    scoreScreen.style.display = 'none';
+    
+    // Clear chat and request new question
+    const chatMessages = document.getElementById('chatMessages');
+    chatMessages.innerHTML = '';
+    requestMultiplayerQuestion();
+}
+
 // Expose functions to global scope
 window.createRoom = createRoom;
 window.joinRoom = joinRoom;
@@ -525,3 +602,4 @@ window.submitMultiplayerAnswer = submitMultiplayerAnswer;
 window.setMultiplayerType = setMultiplayerType;
 window.getMultiplayerType = getMultiplayerType;
 window.leaveRoom = leaveRoom;
+window.continueFromScore = continueFromScore;
