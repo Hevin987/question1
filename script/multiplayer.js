@@ -105,19 +105,46 @@ function connectSocket() {
         
         const chatMessages = document.getElementById('chatMessages');
         chatMessages.innerHTML = '';
-        addSystemMessage(`${startedBy} started the game! Get ready...`);
+        addSystemMessage(`Game started. 🤖 Cooking up a spicy question...`);
+        currentLoadingMessage = addLoadingMessage();
     });
     
     socket.on('newQuestion', ({ question }) => {
+        // Remove loading message before showing question
+        if (currentLoadingMessage && currentLoadingMessage.parentNode) {
+            currentLoadingMessage.remove();
+            currentLoadingMessage = null;
+        }
+        
         // Store question in conversation history
         conversationHistory.push({ role: 'assistant', content: question });
         
-        window.addMessage(question, 'ai');
-        startTimer(30); // Start 30-second timer
+        window.addMessage(question, 'ai').then(() => {
+            // After message is added and buttons are rendered, notify server and start visual timer
+            console.log('[Client] Question UI ready, notifying server to start timer');
+            socket.emit('questionReady', { roomCode: currentRoomCode });
+            startTimer(30); // Start visual timer display for 30 seconds
+        });
     });
+    
+    // Function to notify server that question is ready (called from main.js)
+    window.notifyQuestionReady = () => {
+        console.log('[Client] Question buttons rendered, notifying server');
+        socket.emit('questionReady', { roomCode: currentRoomCode });
+        startTimer(30); // Start visual timer display for 30 seconds
+    };
     
     socket.on('answerSubmitted', ({ playerName: pName, selectedOption, totalAnswers, totalPlayers }) => {
         addSystemMessage(`${pName} answered (${totalAnswers}/${totalPlayers})`);
+    });
+    
+    // AI checking overlay handlers
+    socket.on('aiCheckingStart', () => {
+        console.log('[AI Checking] Showing checking overlay');
+        const overlay = document.getElementById('aiCheckingOverlay');
+        if (overlay) {
+            overlay.classList.add('show');
+        }
     });
     
     socket.on('collabAnswerSelected', ({ playerName: pName, selectedIndex }) => {
@@ -142,7 +169,14 @@ function connectSocket() {
     
     socket.on('revealAnswers', ({ correctAnswer, playerAnswers, scores }) => {
         console.log('revealAnswers received:', { correctAnswer, playerAnswers, scores });
-        stopTimer(); // Stop the timer when answers are revealed
+        
+        // Hide AI checking overlay
+        const overlay = document.getElementById('aiCheckingOverlay');
+        if (overlay) {
+            overlay.classList.remove('show');
+        }
+        
+        hideTimer(); // Hide the timer completely when answers are revealed
         
         // Update level status based on current player's answer
         const myAnswer = playerAnswers.find(p => p.playerName === playerName);
@@ -203,27 +237,9 @@ function connectSocket() {
                 addSystemMessage(`✗ Wrong: ${wrongPlayers.join(', ')}`);
             }
             
-            // In collab mode, game over if answer is wrong
+            // In collab mode, game over if answer is wrong (but wait for continue button)
             if (isWrongInCollab) {
                 addSystemMessage('❌ Wrong answer! Game Over in Collab Mode.');
-                
-                // Show level progress screen after delay
-                setTimeout(() => {
-                    showLevelScreen();
-                    
-                    // After 3 seconds, return to waiting room (subject selection)
-                    setTimeout(() => {
-                        const levelProgressPage = document.getElementById('levelProgressPage');
-                        const chatContainer = document.getElementById('chatContainer');
-                        const waitingRoomPage = document.getElementById('waitingRoomPage');
-                        
-                        // Hide game screens
-                        if (levelProgressPage) levelProgressPage.style.display = 'none';
-                        if (chatContainer) chatContainer.style.display = 'none';
-                        
-                        // Reset game state
-                        currentLevel = 0;
-                        levelStatus = Array(12).fill('unanswered');
                         conversationHistory = [];
                         
                         // Clear subject selection
@@ -255,6 +271,14 @@ function connectSocket() {
                     continueBtn.className = 'quiz-action-btn continue-btn';
                     continueBtn.textContent = 'Continue';
                     continueBtn.addEventListener('click', () => {
+                        // Notify server that a player clicked continue to show score
+                        if (socket && currentRoomCode) {
+                            socket.emit('playerContinue', { 
+                                roomCode: currentRoomCode, 
+                                action: 'showScore',
+                                scores: sortedScores 
+                            });
+                        }
                         showScoreScreen(sortedScores);
                     });
                     
@@ -276,6 +300,27 @@ function connectSocket() {
                 continueBtn.textContent = 'Continue';
                 continueBtn.style.width = '100%'; // Full width since no back button
                 continueBtn.addEventListener('click', () => {
+                    // If wrong in collab mode, just show level screen (don't continue game)
+                    if (isWrongInCollab) {
+                        // Notify server
+                        if (socket && currentRoomCode) {
+                            socket.emit('playerContinue', { 
+                                roomCode: currentRoomCode, 
+                                action: 'gameOverLevelScreen'
+                            });
+                        }
+                        showLevelScreen();
+                        return;
+                    }
+                    
+                    // Notify server that a player clicked continue
+                    if (socket && currentRoomCode) {
+                        socket.emit('playerContinue', { 
+                            roomCode: currentRoomCode, 
+                            action: multiplayerType === 'collab' ? 'levelScreen' : 'nextQuestion'
+                        });
+                    }
+                    
                     // Increment level and show level screen in collab mode
                     currentLevel++;
                     if (multiplayerType === 'collab') {
@@ -289,6 +334,8 @@ function connectSocket() {
                         // Request new question
                         const chatMessages = document.getElementById('chatMessages');
                         chatMessages.innerHTML = '';
+                        addSystemMessage('🎲 Rolling a new question...');
+                        currentLoadingMessage = addLoadingMessage();
                         requestMultiplayerQuestion();
                     }
                 });
@@ -303,6 +350,56 @@ function connectSocket() {
     
     socket.on('error', ({ message }) => {
         alert(message);
+    });
+    
+    socket.on('playerContinued', ({ action, playerName: pName, scores }) => {
+        console.log('Player continued:', pName, action);
+        addSystemMessage(`${pName} clicked continue`);
+        
+        if (action === 'showScore') {
+            // Compete mode: show score screen to all players
+            if (scores && scores.length > 0) {
+                showScoreScreen(scores);
+            } else {
+                console.error('No scores data received for showScore action');
+            }
+        } else if (action === 'gameOverLevelScreen') {
+            // Collab mode game over: show level screen (don't continue game)
+            showLevelScreen();
+        } else if (action === 'levelScreen') {
+            // Collab mode: automatically show level screen for all players
+            currentLevel++;
+            showLevelScreen();
+        } else if (action === 'nextQuestion') {
+            // Compete mode: automatically move to next question for all players
+            currentLevel++;
+            if (currentLevel >= 12) {
+                endGame();
+                return;
+            }
+            
+            // Hide score screen and show chat screen
+            const scoreScreen = document.getElementById('scoreScreen');
+            if (scoreScreen) {
+                scoreScreen.style.display = 'none';
+            }
+            
+            // Show chat screen
+            const chatScreen = document.getElementById('chatScreen');
+            if (chatScreen) {
+                chatScreen.style.display = 'flex';
+            }
+            
+            const chatMessages = document.getElementById('chatMessages');
+            if (chatMessages) {
+                chatMessages.innerHTML = '';
+                addSystemMessage('🧠 Brain power activating...');
+                currentLoadingMessage = addLoadingMessage();
+            }
+            
+            // Don't request question here - the player who clicked continue already requested it
+            // Just wait for the newQuestion event from server
+        }
     });
 }
 
@@ -407,9 +504,7 @@ function updatePlayersList(players) {
     const container = document.getElementById('playersContainer');
     container.innerHTML = players.map(p => `
         <div class="player-item">
-            <span class="player-icon">👤</span>
             <span class="player-name">${p.name}</span>
-            ${multiplayerType === 'compete' ? `<span class="player-score">${p.score} pts</span>` : ''}
         </div>
     `).join('');
 }
@@ -472,6 +567,21 @@ function addSystemMessage(text) {
     chatMessages.scrollTop = chatMessages.scrollHeight;
 }
 
+function addLoadingMessage() {
+    const chatMessages = document.getElementById('chatMessages');
+    
+    const messageDiv = document.createElement('div');
+    messageDiv.className = 'loading-message';
+    messageDiv.innerHTML = '<div class="loading-ring"></div>';
+    
+    chatMessages.appendChild(messageDiv);
+    
+    // Scroll to bottom
+    chatMessages.scrollTop = chatMessages.scrollHeight;
+    
+    return messageDiv;
+}
+
 function updateScoreboard(scores) {
     // TODO: Add scoreboard UI element
     console.log('Scores:', scores);
@@ -505,14 +615,20 @@ function requestMultiplayerQuestion() {
 }
 
 // Submit answer in multiplayer
-function submitMultiplayerAnswer(selectedIndex, isCorrect) {
-    console.log('submitMultiplayerAnswer called:', { selectedIndex, isCorrect, hasSocket: !!socket, roomCode: currentRoomCode });
+function submitMultiplayerAnswer(selectedIndex) {
+    console.log('submitMultiplayerAnswer called:', { selectedIndex, hasSocket: !!socket, roomCode: currentRoomCode });
+    
+    // In compete mode, stop timer for this player after they submit
+    // (timer still runs on server until all players answer)
+    if (multiplayerType === 'compete') {
+        stopTimer();
+    }
+    
     if (socket && currentRoomCode) {
         console.log('Emitting submitAnswer to server');
         socket.emit('submitAnswer', {
             roomCode: currentRoomCode,
-            answer: selectedIndex,
-            isCorrect: isCorrect
+            answer: selectedIndex
         });
     } else {
         console.error('Cannot submit answer - no socket or room code');
@@ -540,7 +656,7 @@ function getMultiplayerType() {
 
 function leaveRoom() {
     // Stop timer
-    stopTimer();
+    hideTimer();
     
     // Notify server
     if (socket && currentRoomCode) {
@@ -611,6 +727,16 @@ function stopTimer() {
         clearInterval(timerInterval);
         timerInterval = null;
     }
+    
+    // Keep timer visible but frozen - don't hide it
+    // const timerContainer = document.getElementById('timerContainer');
+    // if (timerContainer) {
+    //     timerContainer.style.display = 'none';
+    // }
+}
+
+function hideTimer() {
+    stopTimer(); // Stop the interval first
     
     const timerContainer = document.getElementById('timerContainer');
     if (timerContainer) {
@@ -764,6 +890,11 @@ function continueLevelScreen() {
 }
 
 function continueFromScore() {
+    // Notify server that a player clicked continue from score screen
+    if (socket && currentRoomCode) {
+        socket.emit('playerContinue', { roomCode: currentRoomCode, action: 'nextQuestion' });
+    }
+    
     const scoreScreen = document.getElementById('scoreScreen');
     scoreScreen.style.display = 'none';
     
@@ -779,6 +910,8 @@ function continueFromScore() {
     // Clear chat and request new question
     const chatMessages = document.getElementById('chatMessages');
     chatMessages.innerHTML = '';
+    addSystemMessage('✨ Summoning next challenge...');
+    currentLoadingMessage = addLoadingMessage();
     requestMultiplayerQuestion();
 }
 
@@ -819,3 +952,5 @@ window.setMultiplayerType = setMultiplayerType;
 window.getMultiplayerType = getMultiplayerType;
 window.leaveRoom = leaveRoom;
 window.continueFromScore = continueFromScore;
+window.stopTimer = stopTimer;
+window.hideTimer = hideTimer;

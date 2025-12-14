@@ -78,7 +78,7 @@ body {
 }
 
 .mode-button {
-    background: #1c1c1e;
+    background: linear-gradient(145deg, #1c1c1e, #161618);
     border: 2px solid #2c2c2e;
     border-radius: 14px;
     padding: 16px;
@@ -88,6 +88,9 @@ body {
     cursor: pointer;
     transition: all 0.3s ease;
     text-align: left;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4),
+                0 2px 4px rgba(0, 0, 0, 0.3),
+                inset 0 1px 0 rgba(255, 255, 255, 0.05);
 }
 
 .mode-button:hover {
@@ -107,9 +110,11 @@ body {
     display: flex;
     align-items: center;
     justify-content: center;
-    background: #2c2c2e;
+    background: linear-gradient(145deg, #2a2a2c, #2e2e30);
     border-radius: 10px;
     flex-shrink: 0;
+    box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.3),
+                inset 0 -1px 0 rgba(255, 255, 255, 0.05);
 }
 
 .button-text {
@@ -216,7 +221,7 @@ body {
 }
 
 .subject-card {
-    background: #1c1c1e;
+    background: linear-gradient(145deg, #1c1c1e, #161618);
     border: 2px solid #2c2c2e;
     border-radius: 16px;
     padding: 20px 16px;
@@ -226,6 +231,9 @@ body {
     flex-direction: column;
     align-items: center;
     gap: 10px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4),
+                0 2px 4px rgba(0, 0, 0, 0.3),
+                inset 0 1px 0 rgba(255, 255, 255, 0.05);
 }
 
 .subject-card:hover {
@@ -266,8 +274,10 @@ body {
     display: flex;
     align-items: center;
     justify-content: center;
-    background: #2c2c2e;
+    background: linear-gradient(145deg, #2a2a2c, #2e2e30);
     border-radius: 14px;
+    box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.3),
+                inset 0 -1px 0 rgba(255, 255, 255, 0.05);
 }
 
 .subject-name {
@@ -286,7 +296,7 @@ body {
 }
 
 .chat-header {
-    background: #1c1c1e;
+    background: linear-gradient(145deg, #1c1c1e, #161618);
     color: white;
     padding: 60px 20px 15px 20px;
     text-align: center;
@@ -294,6 +304,7 @@ body {
     display: flex;
     align-items: center;
     justify-content: space-between;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
 }
 
 .back-button {
@@ -422,53 +433,123 @@ body {
 }
 
 .ai-message .message-content {
-    background: #1c1c1e;
+    background: linear-gradient(145deg, #1c1c1e, #161618);
     color: white;
     border-bottom-left-radius: 4px;
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.3),
+                inset 0 1px 0 rgba(255, 255, 255, 0.05);
 }
 
-.loading-message .message-content {
-    background: #1c1c1e;
-    color: #8e8e93;
+.loading-message {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    padding: 20px;
+    background: transparent;
 }
 
-.loading-dots {
-    display: inline-flex;
-    gap: 4px;
-}
-
-.loading-dots span {
-    width: 8px;
-    height: 8px;
-    background: #0a84ff;
+.loading-ring {
+    width: 40px;
+    height: 40px;
     border-radius: 50%;
-    animation: bounce 1.4s infinite ease-in-out;
+    border: 3px solid #0a84ff;
+    animation: pulse-ring 1.5s ease-in-out infinite;
 }
 
-.loading-dots span:nth-child(1) {
-    animation-delay: -0.32s;
-}
-
-.loading-dots span:nth-child(2) {
-    animation-delay: -0.16s;
-}
-
-@keyframes bounce {
-    0%, 80%, 100% {
-        transform: scale(0);
+@keyframes pulse-ring {
+    0% {
+        transform: scale(0.8);
+        opacity: 1;
     }
-    40% {
-        transform: scale(1);
+    50% {
+        transform: scale(1.2);
+        opacity: 0.6;
+    }
+    100% {
+        transform: scale(0.8);
+        opacity: 1;
+    }
+}
+
+/* AI Checking Overlay (Windows Whistler style) */
+.ai-checking-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0, 0, 0, 0.85);
+    display: none;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    z-index: 10000;
+}
+
+.ai-checking-overlay.show {
+    display: flex;
+}
+
+.ai-checking-text {
+    color: white;
+    font-size: 20px;
+    margin-bottom: 30px;
+    font-weight: 500;
+}
+
+.whistler-loader {
+    display: flex;
+    flex-direction: row;
+    gap: 8px;
+    align-items: center;
+}
+
+.whistler-bar {
+    width: 40px;
+    height: 6px;
+    border-radius: 3px;
+    animation: whistler-pulse 1.2s ease-in-out infinite;
+}
+
+.whistler-bar:nth-child(1) {
+    background: #E74C3C;
+    animation-delay: 0s;
+}
+
+.whistler-bar:nth-child(2) {
+    background: #27AE60;
+    animation-delay: 0.3s;
+}
+
+.whistler-bar:nth-child(3) {
+    background: #3498DB;
+    animation-delay: 0.6s;
+}
+
+.whistler-bar:nth-child(4) {
+    background: #F39C12;
+    animation-delay: 0.9s;
+}
+
+@keyframes whistler-pulse {
+    0%, 100% {
+        opacity: 0.3;
+        filter: brightness(0.5);
+    }
+    50% {
+        opacity: 1;
+        filter: brightness(1.2);
     }
 }
 
 .chat-input-container {
     padding: 10px 15px 30px 15px;
-    background: #1c1c1e;
+    background: linear-gradient(145deg, #1c1c1e, #161618);
     border-top: 0.5px solid #38383a;
     display: flex;
     gap: 8px;
     align-items: flex-end;
+    box-shadow: 0 -2px 8px rgba(0, 0, 0, 0.3);
 }
 
 #userInput {
@@ -480,8 +561,10 @@ body {
     font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
     resize: none;
     max-height: 100px;
-    background: #2c2c2e;
+    background: linear-gradient(145deg, #2a2a2c, #2e2e30);
     color: white;
+    box-shadow: inset 0 2px 6px rgba(0, 0, 0, 0.3),
+                inset 0 -1px 0 rgba(255, 255, 255, 0.05);
 }
 
 #userInput::placeholder {
@@ -696,8 +779,10 @@ body {
 }
 
 .ai-message .message-content:has(.quiz-container) {
-    background: #1c1c1e;
+    background: linear-gradient(145deg, #1c1c1e, #161618);
     padding: 16px;
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.3),
+                inset 0 1px 0 rgba(255, 255, 255, 0.05);
 }
 
 /* Room Setup Page Styles */
@@ -735,13 +820,15 @@ body {
 }
 
 .room-form input {
-    background: #1c1c1e;
+    background: linear-gradient(145deg, #1c1c1e, #161618);
     border: 2px solid #2c2c2e;
     border-radius: 12px;
     padding: 16px;
     color: white;
     font-size: 16px;
     text-align: center;
+    box-shadow: inset 0 2px 6px rgba(0, 0, 0, 0.3),
+                inset 0 -1px 0 rgba(255, 255, 255, 0.05);
 }
 
 .room-form input:focus {
@@ -778,25 +865,28 @@ body {
 }
 
 .room-code-display {
-    background: #1c1c1e;
+    background: linear-gradient(145deg, #1c1c1e, #161618);
     border: 2px solid #2c2c2e;
-    border-radius: 20px;
-    padding: 30px;
-    margin-bottom: 30px;
+    border-radius: 12px;
+    padding: 15px 20px;
+    margin-bottom: 15px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4),
+                0 2px 4px rgba(0, 0, 0, 0.3),
+                inset 0 1px 0 rgba(255, 255, 255, 0.05);
 }
 
 .room-code-display p {
     color: #8e8e93;
-    font-size: 14px;
-    margin-bottom: 10px;
+    font-size: 11px;
+    margin-bottom: 5px;
 }
 
 .room-code-display h1 {
     color: #0a84ff;
-    font-size: 48px;
+    font-size: 32px;
     font-weight: 700;
-    letter-spacing: 8px;
-    margin: 10px 0;
+    letter-spacing: 6px;
+    margin: 5px 0;
 }
 
 .room-hint {
@@ -805,11 +895,14 @@ body {
 }
 
 .players-list {
-    background: #1c1c1e;
+    background: linear-gradient(145deg, #1c1c1e, #161618);
     border: 2px solid #2c2c2e;
     border-radius: 16px;
     padding: 20px;
     margin-bottom: 20px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4),
+                0 2px 4px rgba(0, 0, 0, 0.3),
+                inset 0 1px 0 rgba(255, 255, 255, 0.05);
 }
 
 .players-list h3 {
@@ -819,31 +912,34 @@ body {
     text-align: left;
 }
 
+#playersContainer {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 10px;
+}
+
 .player-item {
-    display: flex;
-    align-items: center;
-    gap: 12px;
-    padding: 12px;
-    background: #2c2c2e;
-    border-radius: 12px;
-    margin-bottom: 8px;
+    padding: 10px 15px;
+    background: linear-gradient(145deg, #2a2a2c, #2e2e30);
+    border-radius: 10px;
+    text-align: center;
+    box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.3),
+                inset 0 -1px 0 rgba(255, 255, 255, 0.05),
+                0 1px 2px rgba(0, 0, 0, 0.2);
+    border: 1px solid rgba(255, 255, 255, 0.05);
 }
 
 .player-icon {
-    font-size: 24px;
+    display: none;
 }
 
 .player-name {
-    flex: 1;
     color: white;
-    font-size: 16px;
-    text-align: left;
+    font-size: 14px;
 }
 
 .player-score {
-    color: #0a84ff;
-    font-weight: 600;
-    font-size: 14px;
+    display: none;
 }
 
 .start-game-btn {
@@ -1097,6 +1193,8 @@ body {
 
 .level-indicator.red {
     background: linear-gradient(135deg, #ff453a 0%, #dc3545 100%);
+    box-shadow: 0 4px 16px rgba(255, 69, 58, 0.6),
+                0 0 20px rgba(255, 69, 58, 0.4);
 }
 
 .level-row.active .level-item {

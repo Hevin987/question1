@@ -44,6 +44,8 @@ app.post('/chat', async (req, res) => {
     try {
         const { message } = req.body;
         
+        console.log('[Message Received]:', message);
+        
         if (!message) {
             return res.status(400).json({ error: 'Message is required' });
         }
@@ -72,19 +74,33 @@ app.post('/chat', async (req, res) => {
         });
 
         const aiResponse = chatCompletion.choices[0].message.content;
+        console.log('[Original AI Response - Singleplayer]:', aiResponse);
+        console.log('[Response Length]:', aiResponse.length);
         
         // Parse and log the question
         const parsedData = parseQuizJSON(aiResponse);
         if (parsedData) {
             console.log('[Singleplayer] Question generated:', parsedData.question);
             console.log('[Singleplayer] Response length:', aiResponse?.length || 0);
+            
+            // Verify correct answer with AI (check all options one by one)
+            console.log('[Singleplayer] Verifying correct answer with AI...');
+            const correctAnswerIndex = await findCorrectAnswerWithAI(parsedData.question, parsedData.options);
+            parsedData.answer = correctAnswerIndex;
+            console.log(`[Singleplayer] AI determined correct answer: Option ${correctAnswerIndex + 1}`);
+            
+            // Return both the raw response and parsed data with verified answer
+            res.json({ 
+                response: aiResponse,
+                correctAnswer: correctAnswerIndex 
+            });
         } else {
             console.log('[Singleplayer] Warning: Could not parse JSON from response');
             console.log('[Singleplayer] Response length:', aiResponse?.length || 0);
             console.log('[Singleplayer] Response preview:', aiResponse.substring(0, 200));
+            
+            res.json({ response: aiResponse });
         }
-        
-        res.json({ response: aiResponse });
 
     } catch (error) {
         console.error('Error:', error);
@@ -99,13 +115,17 @@ app.post('/chat', async (req, res) => {
 // Helper function to parse quiz JSON (matches client-side logic)
 function parseQuizJSON(text) {
     try {
+        console.log('[Original AI Response]:', text);
+        console.log('[Response Length]:', text.length);
+        
         let jsonText = null;
         
         // First, check for XML format
         const xmlMatch = text.match(/<question>[\s\S]*?<\/question>/);
         if (xmlMatch) {
-            console.log('Found XML format, parsing...');
+            console.log('[XML Format Detected] Parsing XML format...');
             const xmlText = xmlMatch[0];
+            console.log('[XML Content]:', xmlText);
             
             // Extract question text
             const questionMatch = xmlText.match(/<text>([\s\S]*?)<\/text>/);
@@ -139,11 +159,14 @@ function parseQuizJSON(text) {
             }
             
             if (question && options.length > 0) {
+                console.log('[XML Parsed Successfully]:', { question: question.substring(0, 60) + '...', optionsCount: options.length, answer });
                 return {
                     question: question,
                     options: options,
                     answer: answer
                 };
+            } else {
+                console.log('[XML Parse Failed] Missing question or options');
             }
         }
         
@@ -151,7 +174,6 @@ function parseQuizJSON(text) {
         const jsonBlockMatch = text.match(/```json\s*([\s\S]*?)```/);
         if (jsonBlockMatch) {
             jsonText = jsonBlockMatch[1].trim();
-            console.log('Found JSON in code block');
         }
         
         // If no JSON block found, try to find raw JSON object
@@ -241,8 +263,6 @@ function parseQuizJSON(text) {
                 return String(opt);
             });
             
-            console.log('Parsed array format, options:', options);
-            
             return {
                 question: data.question,
                 options: options,
@@ -272,8 +292,6 @@ function parseQuizJSON(text) {
                     break;
                 }
             }
-            
-            console.log('Parsed object format, options:', options);
             
             if (options.length > 0) {
                 return {
@@ -307,8 +325,6 @@ function parseQuizJSON(text) {
                 }
             }
             
-            console.log('Parsed flat format, options:', options);
-            
             if (options.length > 0) {
                 return {
                     question: data.question,
@@ -329,6 +345,7 @@ async function verifyAnswerWithAI(question, answer) {
     try {
         const prompt = `Is "${question}" answer is "${answer}". Only answer yes or no with no additional text`;
         
+        console.log(`[AI Checking] Question: "${question.substring(0, 60)}..."`);        console.log(`[AI Checking] Testing answer: "${answer.substring(0, 60)}..."`);        
         const chatCompletion = await client.chat.completions.create({
             model: AI_MODEL,
             messages: [{ role: "user", content: prompt }],
@@ -336,27 +353,27 @@ async function verifyAnswerWithAI(question, answer) {
             temperature: 0.3,
         });
 
-        const aiResponse = chatCompletion.choices[0].message.content.toLowerCase().trim();
-        
+        const aiResponse = chatCompletion.choices[0].message.content.toLowerCase().trim();        console.log('[Original AI Response - Answer Verification]:', aiResponse);        
+        console.log(`[AI Response] AI says: "${aiResponse}"`);        
         // Check for various yes/no variations
         const yesVariations = ['yes', 'yeah', 'yep', 'yup', 'correct', 'true', 'right', 'affirmative'];
         const noVariations = ['no', 'nope', 'nah', 'incorrect', 'false', 'wrong', 'negative'];
         
         for (const variation of yesVariations) {
             if (aiResponse.includes(variation)) {
-                return true;
+                console.log(`[AI Checking] Result: CORRECT (matched "${variation}")`);                return true;
             }
         }
         
         for (const variation of noVariations) {
             if (aiResponse.includes(variation)) {
-                return false;
+                console.log(`[AI Checking] Result: INCORRECT (matched "${variation}")`);                return false;
             }
         }
         
-        return false;
+        console.log('[AI Checking] Result: UNCERTAIN (defaulting to false)');        return false;
     } catch (error) {
-        console.error('Error verifying answer with AI:', error);
+        console.error('[AI Checking] Error verifying answer with AI:', error);
         return false;
     }
 }
@@ -463,15 +480,26 @@ io.on('connection', (socket) => {
             let aiResponse = '';
             let isValidJSON = false;
             
-            // Try up to 5 times to get a unique, valid JSON question
+            // Try up to 5 times to get a unique, valid question
             while ((isDuplicate || !isValidJSON) && attempts < 5) {
                 attempts++;
                 
-                const baseMessage = `Make a ${room.subject.toLowerCase()} question with 4 MC (Multiple Choice) options in VALID JSON format with only {
-                    "question": "...",
-                    "options": {"A": "", "B": "", "C": "", "D": ""},
-                    "answer": ""
-                } format. IMPORTANT: Ensure all brackets are closed properly.`;
+                const baseMessage = `Generate a ${room.subject.toLowerCase()} multiple choice question with 4 options.
+
+CRITICAL: You MUST respond ONLY in XML format. Do NOT use JSON. Do NOT use any other format.
+
+Required XML structure:
+<question>
+    <text>Your question here</text>
+    <options>
+        <option>First option</option>
+        <option>Second option</option>
+        <option>Third option</option>
+        <option>Fourth option</option>
+    </options>
+</question>
+
+Generate the question now using ONLY the XML format above:`;
                 
                 // Build messages array with conversation history for context
                 const messages = [];
@@ -482,12 +510,12 @@ io.on('connection', (socket) => {
                     messages.push(...recentHistory);
                 }
                 
-                // Add instruction to avoid duplicates or fix JSON if this is a retry
+                // Add instruction to avoid duplicates or fix format if this is a retry
                 if (attempts > 1) {
                     if (!isValidJSON) {
                         messages.push({ 
                             role: "system", 
-                            content: "The previous response had invalid JSON. Generate VALID JSON with all brackets properly closed."
+                            content: "The previous response was invalid. Generate VALID XML format with all tags properly closed."
                         });
                     } else {
                         messages.push({ 
@@ -508,12 +536,13 @@ io.on('connection', (socket) => {
                 });
 
                 aiResponse = chatCompletion.choices[0].message.content;
+                console.log(`[Original AI Response - Multiplayer Q${attempts}]:`, aiResponse);
+                console.log('[Response Length]:', aiResponse.length);
                 
                 // Use shared parsing function that handles multiple JSON formats
                 const parsedData = parseQuizJSON(aiResponse);
                 
                 if (!parsedData) {
-                    console.log(`Attempt ${attempts}: Failed to parse JSON from response`);
                     isValidJSON = false;
                     continue;
                 }
@@ -536,8 +565,9 @@ io.on('connection', (socket) => {
                 });
                 
                 if (!isDuplicate) {
-                    // Store the question text
+                    // Store the question text and parsed data for later verification
                     room.askedQuestions.push(parsedData.question);
+                    room.parsedQuestionData = parsedData; // Store for AI verification later
                     console.log(`✓ Attempt ${attempts}: Unique question accepted (max similarity: ${(maxSimilarity * 100).toFixed(1)}%)`);
                     console.log(`  Total questions in round: ${room.askedQuestions.length}`);
                 } else {
@@ -545,14 +575,11 @@ io.on('connection', (socket) => {
                     console.log(`  New: "${newQuestion.substring(0, 60)}..."`);
                     console.log(`  Old: "${mostSimilarQuestion.substring(0, 60)}..."`);
                 }
-                
-                // Verify correct answer with AI by checking all options
-                room.correctAnswer = await findCorrectAnswerWithAI(parsedData.question, parsedData.options);
             }
             
             if (attempts >= 5) {
                 if (!isValidJSON) {
-                    console.log('Warning: Could not generate valid JSON after 5 attempts');
+                    console.log('Warning: Could not generate valid question after 5 attempts');
                     console.log('Last response:', aiResponse.substring(0, 200));
                 } else if (isDuplicate) {
                     console.log('Warning: Could not generate unique question after 5 attempts, using last attempt');
@@ -572,34 +599,10 @@ io.on('connection', (socket) => {
             room.currentQuestion = aiResponse;
             room.answers.clear();
             
-            // Clear any existing timer
-            if (room.answerTimer) {
-                clearTimeout(room.answerTimer);
-            }
+            console.log('Emitting question, length:', aiResponse?.length || 0);
+            io.to(roomCode).emit('newQuestion', { question: aiResponse });
             
-            // Set 30-second timer to reveal answers
-            room.answerTimer = setTimeout(() => {
-                if (room.answers.size > 0 && room.answers.size < room.players.length) {
-                    const playerAnswers = Array.from(room.answers.values()).map(a => ({
-                        playerName: a.playerName,
-                        selectedIndex: a.selectedIndex,
-                        isCorrect: a.isCorrect
-                    }));
-                    
-                    io.to(roomCode).emit('revealAnswers', {
-                        correctAnswer: room.correctAnswer,
-                        playerAnswers: playerAnswers,
-                        scores: room.players.map(p => ({ name: p.name, score: p.score }))
-                    });
-                    
-                    setTimeout(() => {
-                        if (rooms.has(roomCode)) {
-                            room.answers.clear();
-                        }
-                    }, 3000);
-                }
-            }, 30000); // 30 seconds
-            console.log('Emitting question, length:', aiResponse?.length || 0);            io.to(roomCode).emit('newQuestion', { question: aiResponse });
+            // Timer will start when client emits 'questionReady' after rendering buttons
         } catch (error) {
             console.error('Error generating question:', error);
             socket.emit('error', { message: 'Failed to generate question' });
@@ -667,11 +670,22 @@ io.on('connection', (socket) => {
             while (!isValidJSON && attempts < 5) {
                 attempts++;
                 
-                const message = `Make a ${room.subject.toLowerCase()} question with 4 MC (Multiple Choice) options in VALID JSON format with only {
-                    "question": "...",
-                    "options": {"A": "", "B": "", "C": "", "D": ""},
-                    "answer": ""
-                } format. IMPORTANT: Ensure all brackets are closed properly.`;
+                const message = `Generate a ${room.subject.toLowerCase()} multiple choice question with 4 options.
+
+CRITICAL: You MUST respond ONLY in XML format. Do NOT use JSON. Do NOT use any other format.
+
+Required XML structure:
+<question>
+    <text>Your question here</text>
+    <options>
+        <option>First option</option>
+        <option>Second option</option>
+        <option>Third option</option>
+        <option>Fourth option</option>
+    </options>
+</question>
+
+Generate the question now using ONLY the XML format above:`;
                 
                 const messages = [{ role: "user", content: message }];
                 
@@ -691,6 +705,8 @@ io.on('connection', (socket) => {
                 });
 
                 aiResponse = chatCompletion.choices[0].message.content;
+                console.log(`[Original AI Response - First Question Attempt ${attempts}]:`, aiResponse);
+                console.log('[Response Length]:', aiResponse.length);
                 
                 // Use shared parsing function
                 const parsedData = parseQuizJSON(aiResponse);
@@ -704,18 +720,15 @@ io.on('connection', (socket) => {
                 isValidJSON = true;
                 room.currentQuestion = aiResponse;
                 
-                // Store first question in askedQuestions
+                // Store first question in askedQuestions and parsed data for later verification
                 room.askedQuestions.push(parsedData.question);
-                
-                // Verify correct answer with AI by checking all options
-                room.correctAnswer = await findCorrectAnswerWithAI(parsedData.question, parsedData.options);
+                room.parsedQuestionData = parsedData; // Store for AI verification later
                 
                 console.log(`First question attempt ${attempts}: Valid question generated`);
             }
             
             if (!isValidJSON) {
                 console.log('Warning: Could not generate valid JSON for first question after 5 attempts');
-                room.correctAnswer = 0; // Default to first option
             }
             
             room.answers.clear();
@@ -723,33 +736,7 @@ io.on('connection', (socket) => {
             // Emit the first question to all players
             io.to(roomCode).emit('newQuestion', { question: room.currentQuestion });
             
-            // Clear any existing timer
-            if (room.answerTimer) {
-                clearTimeout(room.answerTimer);
-            }
-            
-            // Set 30-second timer to reveal answers
-            room.answerTimer = setTimeout(() => {
-                if (room.answers.size > 0 && room.answers.size < room.players.length) {
-                    const playerAnswers = Array.from(room.answers.values()).map(a => ({
-                        playerName: a.playerName,
-                        selectedIndex: a.selectedIndex,
-                        isCorrect: a.isCorrect
-                    }));
-                    
-                    io.to(roomCode).emit('revealAnswers', {
-                        correctAnswer: room.correctAnswer,
-                        playerAnswers: playerAnswers,
-                        scores: room.players.map(p => ({ name: p.name, score: p.score }))
-                    });
-                    
-                    setTimeout(() => {
-                        if (rooms.has(roomCode)) {
-                            room.answers.clear();
-                        }
-                    }, 3000);
-                }
-            }, 30000); // 30 seconds
+            // Timer will start when client emits 'questionReady' after rendering buttons
 
         } catch (error) {
             console.error('Error generating question:', error);
@@ -757,9 +744,85 @@ io.on('connection', (socket) => {
         }
     });
 
+    // Client confirms question UI is ready (buttons rendered)
+    socket.on('questionReady', ({ roomCode }) => {
+        const room = rooms.get(roomCode);
+        if (!room) return;
+
+        // Clear any existing timer
+        if (room.answerTimer) {
+            clearTimeout(room.answerTimer);
+        }
+        
+        console.log('[Timer] Question UI ready, starting 30-second timer');
+        // Start 30-second timer now that buttons are clickable
+        room.answerTimer = setTimeout(async () => {
+            console.log('[Timer] Time expired! Checking answers with AI...');
+            
+            // Only process if not all players have answered (which would have been handled already)
+            if (room.answers.size < room.players.length) {
+                // Show AI checking overlay to all players
+                io.to(roomCode).emit('aiCheckingStart');
+                
+                // Verify correct answer with AI when time runs out
+                if (room.parsedQuestionData) {
+                    room.correctAnswer = await findCorrectAnswerWithAI(room.parsedQuestionData.question, room.parsedQuestionData.options);
+                }
+                
+                // Calculate isCorrect for each answer and update scores
+                const playerAnswers = Array.from(room.answers.values()).map(a => {
+                    const isCorrect = a.selectedIndex === room.correctAnswer;
+                    a.isCorrect = isCorrect;
+                    
+                    // Update player scores
+                    if (isCorrect) {
+                        if (room.mode === 'collab') {
+                            // In collab, all players get the point
+                            room.players.forEach(p => p.score += 1);
+                        } else if (room.mode === 'compete') {
+                            // In compete, only correct player gets point
+                            const player = room.players.find(p => p.name === a.playerName);
+                            if (player) {
+                                player.score += 1;
+                            }
+                        }
+                    }
+                    
+                    return {
+                        playerName: a.playerName,
+                        selectedIndex: a.selectedIndex,
+                        isCorrect: isCorrect
+                    };
+                });
+                
+                // Include all players, even those who didn't answer
+                const allPlayerAnswers = room.players.map(player => {
+                    const answer = Array.from(room.answers.values()).find(a => a.playerName === player.name);
+                    return {
+                        playerName: player.name,
+                        selectedIndex: answer ? answer.selectedIndex : null,
+                        isCorrect: answer ? answer.isCorrect : false
+                    };
+                });
+                
+                io.to(roomCode).emit('revealAnswers', {
+                    correctAnswer: room.correctAnswer,
+                    playerAnswers: allPlayerAnswers,
+                    scores: room.players.map(p => ({ name: p.name, score: p.score }))
+                });
+                
+                setTimeout(() => {
+                    if (rooms.has(roomCode)) {
+                        room.answers.clear();
+                    }
+                }, 3000);
+            }
+        }, 30000); // 30 seconds
+    });
+
     // Submit answer
-    socket.on('submitAnswer', ({ roomCode, answer, isCorrect }) => {
-        console.log('submitAnswer received:', { roomCode, answer, isCorrect, socketId: socket.id });
+    socket.on('submitAnswer', async ({ roomCode, answer }) => {
+        console.log('submitAnswer received:', { roomCode, answer, socketId: socket.id });
         const room = rooms.get(roomCode);
         if (!room) {
             console.log('Room not found:', roomCode);
@@ -772,17 +835,13 @@ io.on('connection', (socket) => {
             return;
         }
 
-        room.answers.set(socket.id, { answer, isCorrect, playerName: player.name, selectedIndex: answer });
+        // Store answer without isCorrect - will be determined after AI verification
+        room.answers.set(socket.id, { answer, playerName: player.name, selectedIndex: answer });
         console.log(`Player ${player.name} answered. Total answers: ${room.answers.size}/${room.players.length}`);
-
-
-        if (room.mode === 'compete' && isCorrect) {
-            player.score += 1;
-        }
 
         // In collab mode, reveal immediately when first player answers
         if (room.mode === 'collab' && room.answers.size === 1) {
-            console.log('Collab mode: First answer received, syncing selection and revealing to all players');
+            console.log('Collab mode: First answer received, syncing selection');
             
             // Broadcast the selection to all other players
             socket.to(roomCode).emit('collabAnswerSelected', {
@@ -790,18 +849,38 @@ io.on('connection', (socket) => {
                 selectedIndex: answer
             });
             
-            // Clear the timer
+            // Stop the timer
+            console.log('[Timer] Stopping timer - all players answered in collab mode');
             if (room.answerTimer) {
                 clearTimeout(room.answerTimer);
                 room.answerTimer = null;
             }
             
-            // Reveal answer to all players
-            const playerAnswers = Array.from(room.answers.values()).map(a => ({
-                playerName: a.playerName,
-                selectedIndex: a.selectedIndex,
-                isCorrect: a.isCorrect
-            }));
+            // Show AI checking overlay to all players
+            io.to(roomCode).emit('aiCheckingStart');
+            
+            // Do AI verification now that all players answered
+            console.log('[AI Verification] Starting answer verification...');
+            if (room.parsedQuestionData) {
+                room.correctAnswer = await findCorrectAnswerWithAI(room.parsedQuestionData.question, room.parsedQuestionData.options);
+            }
+            
+            // Calculate isCorrect for each answer and update scores
+            const playerAnswers = Array.from(room.answers.values()).map(a => {
+                const isCorrect = a.selectedIndex === room.correctAnswer;
+                a.isCorrect = isCorrect;
+                
+                // Update player score in collab mode (all get point if any correct)
+                if (isCorrect) {
+                    room.players.forEach(p => p.score += 1);
+                }
+                
+                return {
+                    playerName: a.playerName,
+                    selectedIndex: a.selectedIndex,
+                    isCorrect: isCorrect
+                };
+            });
             
             io.to(roomCode).emit('revealAnswers', {
                 correctAnswer: room.correctAnswer,
@@ -829,23 +908,44 @@ io.on('connection', (socket) => {
         
         // Check if all players have answered (compete mode)
         if (room.answers.size === room.players.length) {
-            console.log('All players answered! Revealing answers...');
-            // Clear the timer since all answered
+            console.log('All players answered!');
+            // Stop the timer since all answered
+            console.log('[Timer] Stopping timer - all players answered');
             if (room.answerTimer) {
                 clearTimeout(room.answerTimer);
                 room.answerTimer = null;
             }
             
-            // Reveal answers to all players
-            const playerAnswers = Array.from(room.answers.values()).map(a => ({
-                playerName: a.playerName,
-                selectedIndex: a.selectedIndex,
-                isCorrect: a.isCorrect
-            }));
+            // Show AI checking overlay to all players
+            io.to(roomCode).emit('aiCheckingStart');
+            
+            // Do AI verification now that all players answered
+            console.log('[AI Verification] Starting answer verification...');
+            if (room.parsedQuestionData) {
+                room.correctAnswer = await findCorrectAnswerWithAI(room.parsedQuestionData.question, room.parsedQuestionData.options);
+            }
+            
+            // Calculate isCorrect for each answer and update scores
+            const playerAnswers = Array.from(room.answers.values()).map(a => {
+                const isCorrect = a.selectedIndex === room.correctAnswer;
+                a.isCorrect = isCorrect;
+                
+                // Update player score in compete mode (individual scoring)
+                if (isCorrect && room.mode === 'compete') {
+                    const player = room.players.find(p => p.name === a.playerName);
+                    if (player) {
+                        player.score += 1;
+                    }
+                }
+                
+                return {
+                    playerName: a.playerName,
+                    selectedIndex: a.selectedIndex,
+                    isCorrect: isCorrect
+                };
+            });
             
             console.log('Emitting revealAnswers:', { correctAnswer: room.correctAnswer, playerAnswers });
-            // Get correct answer from the current question
-            // This should be stored when the question is generated
             io.to(roomCode).emit('revealAnswers', {
                 correctAnswer: room.correctAnswer,
                 playerAnswers: playerAnswers,
@@ -859,6 +959,24 @@ io.on('connection', (socket) => {
                 }
             }, 3000);
         }
+    });
+
+    // Player clicked continue button
+    socket.on('playerContinue', ({ roomCode, action, scores }) => {
+        const room = rooms.get(roomCode);
+        if (!room) return;
+
+        const player = room.players.find(p => p.id === socket.id);
+        if (!player) return;
+
+        console.log(`${player.name} clicked continue with action: ${action}`);
+        
+        // Broadcast to all OTHER players in the room (not the one who clicked)
+        socket.to(roomCode).emit('playerContinued', {
+            action: action,
+            playerName: player.name,
+            scores: scores // Pass scores data if showing score screen
+        });
     });
 
     // Disconnect handling

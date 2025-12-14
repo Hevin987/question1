@@ -199,7 +199,7 @@
         <div class="score-content">
             <h2 class="score-title">Round Complete!</h2>
             <div id="scoreboardContainer" class="scoreboard-container"></div>
-            <button class="continue-score-btn" onclick="continueFromScore()">Next Question</button>
+            <button class="continue-score-btn" onclick="continueFromScore()">Continue</button>
         </div>
     </div>
 
@@ -286,6 +286,17 @@
                     Hello! I'm your AI assistant. How can I help you today?
                 </div>
             </div>
+        </div>
+    </div>
+
+    <!-- AI Checking Overlay -->
+    <div class="ai-checking-overlay" id="aiCheckingOverlay">
+        <div class="ai-checking-text">AI is checking, please wait</div>
+        <div class="whistler-loader">
+            <div class="whistler-bar"></div>
+            <div class="whistler-bar"></div>
+            <div class="whistler-bar"></div>
+            <div class="whistler-bar"></div>
         </div>
     </div>
 </body>

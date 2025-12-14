@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <style>
+        .ai-checking-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.8);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            z-index: 10000;
+        }
+        
+        .ai-checking-text {
+            color: white;
+            font-size: 20px;
+            margin-bottom: 30px;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+        }
+        
+        .whistler-loader {
+            display: flex;
+            flex-direction: row;
+            gap: 8px;
+            align-items: center;
+        }
+        
+        .whistler-bar {
+            width: 40px;
+            height: 6px;
+            border-radius: 3px;
+            animation: whistler-pulse 1.2s ease-in-out infinite;
+        }
+        
+        .whistler-bar:nth-child(1) {
+            background: #E74C3C;
+            animation-delay: 0s;
+        }
+        
+        .whistler-bar:nth-child(2) {
+            background: #27AE60;
+            animation-delay: 0.3s;
+        }
+        
+        .whistler-bar:nth-child(3) {
+            background: #3498DB;
+            animation-delay: 0.6s;
+        }
+        
+        .whistler-bar:nth-child(4) {
+            background: #F39C12;
+            animation-delay: 0.9s;
+        }
+        
+        @keyframes whistler-pulse {
+            0%, 100% {
+                opacity: 0.3;
+                filter: brightness(0.5);
+            }
+            50% {
+                opacity: 1;
+                filter: brightness(1.2);
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="ai-checking-overlay">
+        <div class="ai-checking-text">AI is checking, please wait</div>
+        <div class="whistler-loader">
+            <div class="whistler-bar"></div>
+            <div class="whistler-bar"></div>
+            <div class="whistler-bar"></div>
+            <div class="whistler-bar"></div>
+        </div>
+    </div>
+</body>
+</html>

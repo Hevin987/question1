@@ -64,15 +64,22 @@ function startChat(subject) {
     const loadingDiv = addLoadingMessage();
     
     // Automatically send preset question based on subject
-    const presetQuestion = `Make a randomize ${subject.toLowerCase()} question with 4 MC (Multiple Choice) options in only xml format in <question>
-        <text></text>
-        <options> 
-            <option></option>
-            <option></option>
-            <option></option>
-            <option></option>
-        </options>
-    </question>`;
+    const presetQuestion = `Generate a ${subject.toLowerCase()} multiple choice question with 4 options. 
+
+CRITICAL: You MUST respond ONLY in XML format. Do NOT use JSON. Do NOT use any other format.
+
+Required XML structure:
+<question>
+    <text>Your question here</text>
+    <options>
+        <option>First option</option>
+        <option>Second option</option>
+        <option>Third option</option>
+        <option>Fourth option</option>
+    </options>
+</question>
+
+Generate the question now using ONLY the XML format above:`;
     
     // Send the preset question to AI
     const apiUrl = window.location.origin + '/chat';
@@ -92,6 +99,12 @@ function startChat(subject) {
     .then(async data => {
         // Remove loading message
         loadingDiv.remove();
+        
+        // Store the AI-verified correct answer if provided
+        if (data.correctAnswer !== undefined) {
+            window.currentCorrectAnswer = data.correctAnswer;
+            console.log('[Singleplayer] AI-verified correct answer stored:', data.correctAnswer);
+        }
         
         // Add AI response (quiz only)
         await addMessage(data.response, 'ai');
@@ -556,21 +569,7 @@ function tryParseQuizJSON(text) {
     return { quizData: null };
 }
 
-async function findCorrectAnswerWithAI(question, options) {
-    console.log(`Verifying all options for question: "${question.substring(0, 60)}..."`);
-    
-    for (let i = 0; i < options.length; i++) {
-        const isCorrect = await verifyAnswerWithAI(question, options[i]);
-        console.log(`  Option ${i + 1} (${options[i].substring(0, 40)}...): ${isCorrect ? '✓ CORRECT' : '✗ Wrong'}`);
-        
-        if (isCorrect) {
-            return i;
-        }
-    }
-    
-    console.log('  Warning: No correct answer found, defaulting to option 0');
-    return 0; // Default to first option if none verified as correct
-}
+// Client-side AI verification removed - all verification now happens server-side
 
 async function createQuizTable(quizData) {
     const container = document.createElement('div');
@@ -581,9 +580,6 @@ async function createQuizTable(quizData) {
     questionDiv.className = 'quiz-question';
     questionDiv.textContent = quizData.question;
     container.appendChild(questionDiv);
-    
-    // Verify correct answer with AI by checking all options
-    const verifiedCorrectAnswer = await findCorrectAnswerWithAI(quizData.question, quizData.options);
     
     // Options grid (now using div instead of table)
     const grid = document.createElement('div');
@@ -599,9 +595,9 @@ async function createQuizTable(quizData) {
         
         optionDiv.appendChild(textSpan);
         
-        // Make option clickable - use verified answer
+        // Make option clickable - pass the parsed answer (AI verification happens server-side)
         optionDiv.addEventListener('click', function() {
-            handleAnswerSelection(optionDiv, index, verifiedCorrectAnswer, grid, quizData.question, option);
+            handleAnswerSelection(optionDiv, index, quizData.answer, grid, quizData.question, option);
         });
         
         grid.appendChild(optionDiv);
@@ -609,73 +605,37 @@ async function createQuizTable(quizData) {
     
     container.appendChild(grid);
     
+    // Notify that question UI is ready (buttons are clickable) - for multiplayer
+    if (window.multiplayerMode && typeof window.notifyQuestionReady === 'function') {
+        // Use setTimeout to ensure buttons are fully rendered in DOM
+        setTimeout(() => {
+            window.notifyQuestionReady();
+        }, 0);
+    }
+    
     // No answer info displayed
     
     return container;
 }
 
-async function verifyAnswerWithAI(question, answer) {
-    try {
-        const prompt = `Is "${question}" answer is "${answer}". Only answer yes or no with no additional text`;
-        const apiUrl = window.location.origin + '/chat';
-        
-        const response = await fetch(apiUrl, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({ message: prompt })
-        });
-        
-        const data = await response.json();
-        const aiResponse = data.response.toLowerCase().trim();
-        
-        // Check for various yes/no variations
-        const yesVariations = ['yes', 'yeah', 'yep', 'yup', 'correct', 'true', 'right', 'affirmative'];
-        const noVariations = ['no', 'nope', 'nah', 'incorrect', 'false', 'wrong', 'negative'];
-        
-        for (const variation of yesVariations) {
-            if (aiResponse.includes(variation)) {
-                return true;
-            }
-        }
-        
-        for (const variation of noVariations) {
-            if (aiResponse.includes(variation)) {
-                return false;
-            }
-        }
-        
-        // Default to false if unclear
-        return false;
-    } catch (error) {
-        console.error('Error verifying answer with AI:', error);
-        return false;
-    }
-}
+// Client-side verifyAnswerWithAI function removed - all verification now happens server-side
 
 async function handleAnswerSelection(selectedRow, selectedIndex, correctAnswer, table, question, selectedAnswer) {
     // Prevent multiple selections
     if (table.classList.contains('answered')) return;
     
+    // Stop timer IMMEDIATELY at the first line - before any processing
+    const multiplayerState = window.getMultiplayerState();
+    const isMultiplayer = multiplayerState && multiplayerState.isActive;
+    if (isMultiplayer && typeof window.stopTimer === 'function') {
+        window.stopTimer();
+    }
+    
     table.classList.add('answered');
     
     const rows = table.querySelectorAll('.quiz-option');
     
-    // Verify answer with AI
-    let isCorrect = false;
-    if (question && selectedAnswer) {
-        isCorrect = await verifyAnswerWithAI(question, selectedAnswer);
-        console.log('AI verification result:', isCorrect);
-    } else {
-        // Fallback to index comparison if AI verification not available
-        isCorrect = selectedIndex === correctAnswer;
-    }
-    
-    // Check if multiplayer
-    const multiplayerState = window.getMultiplayerState();
-    const isMultiplayer = multiplayerState && multiplayerState.isActive;
-    
+    // In multiplayer, don't verify answer on client - server will do it after timer stops
     if (isMultiplayer) {
         // In multiplayer: only show which option was selected (no colors yet)
         rows.forEach((row, index) => {
@@ -686,19 +646,29 @@ async function handleAnswerSelection(selectedRow, selectedIndex, correctAnswer, 
             }
         });
         
-        // Send answer to server
-        console.log('Submitting multiplayer answer:', selectedIndex, isCorrect);
-        window.submitMultiplayerAnswer(selectedIndex, isCorrect);
+        // Send answer to server (server will verify with AI after timer stops)
+        console.log('Submitting multiplayer answer:', selectedIndex);
+        window.submitMultiplayerAnswer(selectedIndex);
         
         // Don't add action buttons in multiplayer - wait for reveal
         return;
     }
     
-    // Singleplayer: reveal immediately
+    // Singleplayer: reveal immediately using the AI-verified correctAnswer from server
+    const aiVerifiedAnswer = window.currentCorrectAnswer;
+    console.log('[Singleplayer] Using AI-verified answer:', aiVerifiedAnswer, 'Selected:', selectedIndex);
+    
     rows.forEach((row, index) => {
         row.style.pointerEvents = 'none';
         
-        if (correctAnswer !== undefined) {
+        if (aiVerifiedAnswer !== undefined) {
+            if (index === aiVerifiedAnswer) {
+                row.classList.add('correct');
+            } else if (index === selectedIndex) {
+                row.classList.add('incorrect');
+            }
+        } else if (correctAnswer !== undefined) {
+            // Fallback to parsed correctAnswer if AI verification not available
             if (index === correctAnswer) {
                 row.classList.add('correct');
             } else if (index === selectedIndex) {
@@ -775,19 +745,9 @@ function addLoadingMessage() {
     if (!chatMessages) chatMessages = document.getElementById('chatMessages');
     
     const messageDiv = document.createElement('div');
-    messageDiv.className = 'message ai-message loading-message';
+    messageDiv.className = 'loading-message';
+    messageDiv.innerHTML = '<div class="loading-ring"></div>';
     
-    const contentDiv = document.createElement('div');
-    contentDiv.className = 'message-content';
-    contentDiv.innerHTML = `
-        <div class="loading-dots">
-            <span></span>
-            <span></span>
-            <span></span>
-        </div>
-    `;
-    
-    messageDiv.appendChild(contentDiv);
     chatMessages.appendChild(messageDiv);
     
     // Scroll to bottom
