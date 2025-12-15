@@ -240,6 +240,9 @@ function connectSocket() {
             // In collab mode, game over if answer is wrong (but wait for continue button)
             if (isWrongInCollab) {
                 addSystemMessage('❌ Wrong answer! Game Over in Collab Mode.');
+                setTimeout(() => {
+                    addSystemMessage('Returning to waiting room...');
+                    setTimeout(() => {
                         conversationHistory = [];
                         
                         // Clear subject selection
