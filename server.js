@@ -59,7 +59,7 @@ app.post('/chat', async (req, res) => {
         }
         
         // Using Llama 3.2 model via Hugging Face router
-        console.log('[Singleplayer] Generating question...');
+        console.log('[Game] Generating question...');
         
         const chatCompletion = await client.chat.completions.create({
             model: AI_MODEL,
@@ -80,14 +80,14 @@ app.post('/chat', async (req, res) => {
         // Parse and log the question
         const parsedData = parseQuizJSON(aiResponse);
         if (parsedData) {
-            console.log('[Singleplayer] Question generated:', parsedData.question);
-            console.log('[Singleplayer] Response length:', aiResponse?.length || 0);
+            console.log('[Game] Question generated:', parsedData.question);
+            console.log('[Game] Response length:', aiResponse?.length || 0);
             
             // Verify correct answer with AI (check all options one by one)
-            console.log('[Singleplayer] Verifying correct answer with AI...');
+            console.log('[Game] Verifying correct answer with AI...');
             const correctAnswerIndex = await findCorrectAnswerWithAI(parsedData.question, parsedData.options);
             parsedData.answer = correctAnswerIndex;
-            console.log(`[Singleplayer] AI determined correct answer: Option ${correctAnswerIndex + 1}`);
+            console.log(`[Game] AI determined correct answer: Option ${correctAnswerIndex + 1}`);
             
             // Return both the raw response and parsed data with verified answer
             res.json({ 
@@ -95,9 +95,9 @@ app.post('/chat', async (req, res) => {
                 correctAnswer: correctAnswerIndex 
             });
         } else {
-            console.log('[Singleplayer] Warning: Could not parse JSON from response');
-            console.log('[Singleplayer] Response length:', aiResponse?.length || 0);
-            console.log('[Singleplayer] Response preview:', aiResponse.substring(0, 200));
+            console.log('[Game] Warning: Could not parse JSON from response');
+            console.log('[Game] Response length:', aiResponse?.length || 0);
+            console.log('[Game] Response preview:', aiResponse.substring(0, 200));
             
             res.json({ response: aiResponse });
         }
@@ -661,6 +661,16 @@ Generate the question now using ONLY the XML format above:`;
             startedBy: player.name
         });
 
+        // In collab mode, don't generate first question automatically
+        // Question will be generated when client requests it after level progress screen
+        if (room.mode === 'collab') {
+            console.log('Collab mode: Skipping automatic first question generation');
+            return;
+        }
+
+        // In compete mode, generate first question immediately
+        console.log('Compete mode: Generating first question automatically');
+        
         // Generate first question with retry for valid JSON
         try {
             let attempts = 0;

@@ -4,12 +4,443 @@ let chatMessages;
 let currentMode = 'singleplayer'; // 'singleplayer' or 'multiplayer'
 let currentSubject = 'History'; // Selected subject
 
+// Audio management
+let audioContext = null;
+let mainBGMIntro = null;
+let mainBGMLoop = null;
+let introBuffer = null;
+let loopBuffer = null;
+let currentSource = null;
+let isInGame = false;
+let hasPlayedIntro = false;
+let introEndTime = 0;
+let isPlaying = false; // Track if audio is currently playing
+let startBGM = true; // Track if we should start BGM on first click
+
+// Level BGM (intro + loop)
+let levelBGMIntroBuffer = null;
+let levelBGMLoopBuffer = null;
+let levelBGMSource = null;
+let levelBGMPlaying = false;
+let levelBGMIntroPlayed = false;
+
+// Sound effects
+let correctSound = null;
+let wrongSound = null;
+let levelFirstBGM = null;
+let nextQuestionSound = null;
+let levelUpSound = null;
+let levelFailedSound = null;
+
+function initSoundEffects() {
+    if (!correctSound) {
+        correctSound = new Audio('audio/right.ogg');
+        correctSound.volume = 0.6;
+        correctSound.preload = 'auto';
+    }
+    if (!wrongSound) {
+        wrongSound = new Audio('audio/wrong.ogg');
+        wrongSound.volume = 0.6;
+        wrongSound.preload = 'auto';
+    }
+    if (!levelFirstBGM) {
+        levelFirstBGM = new Audio('audio/levelfirstlevelbgm.ogg');
+        levelFirstBGM.volume = 0.5;
+        levelFirstBGM.preload = 'auto';
+    }
+    if (!nextQuestionSound) {
+        nextQuestionSound = new Audio('audio/nextquestion.ogg');
+        nextQuestionSound.volume = 0.6;
+        nextQuestionSound.preload = 'auto';
+    }
+    if (!levelUpSound) {
+        levelUpSound = new Audio('audio/levelup.ogg');
+        levelUpSound.volume = 0.6;
+        levelUpSound.preload = 'auto';
+    }
+    if (!levelFailedSound) {
+        levelFailedSound = new Audio('audio/levelfailed.ogg');
+        levelFailedSound.volume = 0.6;
+        levelFailedSound.preload = 'auto';
+    }
+}
+
+function playCorrectSound() {
+    initSoundEffects();
+    correctSound.currentTime = 0;
+    correctSound.play().catch(e => console.log('Correct sound play failed:', e));
+}
+
+function playWrongSound() {
+    initSoundEffects();
+    wrongSound.currentTime = 0;
+    wrongSound.play().catch(e => console.log('Wrong sound play failed:', e));
+}
+
+function playLevelFirstBGM() {
+    initSoundEffects();
+    levelFirstBGM.currentTime = 0;
+    levelFirstBGM.play().catch(e => console.log('Level first BGM play failed:', e));
+}
+
+function stopLevelFirstBGM() {
+    if (levelFirstBGM) {
+        levelFirstBGM.pause();
+        levelFirstBGM.currentTime = 0;
+    }
+}
+
+function playLevelUpSound() {
+    initSoundEffects();
+    levelUpSound.currentTime = 0;
+    levelUpSound.play().catch(e => console.log('Level up sound play failed:', e));
+}
+
+function stopLevelUpSound() {
+    if (levelUpSound) {
+        levelUpSound.pause();
+        levelUpSound.currentTime = 0;
+    }
+}
+
+function playNextQuestionSound() {
+    initSoundEffects();
+    nextQuestionSound.currentTime = 0;
+    nextQuestionSound.play().catch(e => console.log('Next question sound play failed:', e));
+}
+
+function playLevelFailedSound() {
+    initSoundEffects();
+    levelFailedSound.currentTime = 0;
+    levelFailedSound.play().catch(e => console.log('Level failed sound play failed:', e));
+}
+
+function stopLevelFailedSound() {
+    if (levelFailedSound) {
+        levelFailedSound.pause();
+        levelFailedSound.currentTime = 0;
+    }
+}
+
+function playLevelBGM() {
+    if (!audioContext || levelBGMPlaying) return;
+    
+    if (!levelBGMIntroPlayed) {
+        // Play intro first
+        if (!levelBGMIntroBuffer) {
+            console.log('Level BGM intro not loaded yet');
+            return;
+        }
+        
+        console.log('Playing level BGM intro');
+        levelBGMSource = audioContext.createBufferSource();
+        levelBGMSource.buffer = levelBGMIntroBuffer;
+        
+        const gainNode = audioContext.createGain();
+        gainNode.gain.value = 0.5;
+        
+        levelBGMSource.connect(gainNode);
+        gainNode.connect(audioContext.destination);
+        
+        levelBGMSource.onended = () => {
+            console.log('Level BGM intro ended, starting loop');
+            levelBGMPlaying = false;
+            if (levelBGMSource) {
+                levelBGMIntroPlayed = true;
+                playLevelBGMLoop();
+            }
+        };
+        
+        levelBGMSource.start(0);
+        levelBGMPlaying = true;
+    } else {
+        // Intro already played, just play loop
+        playLevelBGMLoop();
+    }
+}
+
+function playLevelBGMLoop() {
+    if (!audioContext || !levelBGMLoopBuffer || levelBGMPlaying) return;
+    
+    console.log('Playing level BGM loop');
+    levelBGMSource = audioContext.createBufferSource();
+    levelBGMSource.buffer = levelBGMLoopBuffer;
+    levelBGMSource.loop = true;
+    
+    const gainNode = audioContext.createGain();
+    gainNode.gain.value = 0.5;
+    
+    levelBGMSource.connect(gainNode);
+    gainNode.connect(audioContext.destination);
+    
+    levelBGMSource.start(0);
+    levelBGMPlaying = true;
+}
+
+function stopLevelBGM() {
+    console.log('stopLevelBGM called');
+    if (levelBGMSource) {
+        try {
+            const sourceToStop = levelBGMSource;
+            levelBGMSource = null;
+            sourceToStop.stop();
+            levelBGMPlaying = false;
+            levelBGMIntroPlayed = false;
+            console.log('Level BGM stopped');
+        } catch (e) {
+            levelBGMSource = null;
+            levelBGMPlaying = false;
+            levelBGMIntroPlayed = false;
+        }
+    }
+}
+
+function initAudio() {
+    if (!audioContext) {
+        audioContext = new (window.AudioContext || window.webkitAudioContext)();
+    }
+    
+    // Load intro audio
+    if (!introBuffer) {
+        fetch('audio/mainbgm.ogg')
+            .then(response => response.arrayBuffer())
+            .then(arrayBuffer => audioContext.decodeAudioData(arrayBuffer))
+            .then(buffer => {
+                introBuffer = buffer;
+                console.log('Intro loaded, duration:', buffer.duration);
+            })
+            .catch(e => console.error('Error loading intro:', e));
+    }
+    
+    // Load loop audio
+    if (!loopBuffer) {
+        fetch('audio/mainbgmloop.ogg')
+            .then(response => response.arrayBuffer())
+            .then(arrayBuffer => audioContext.decodeAudioData(arrayBuffer))
+            .then(buffer => {
+                loopBuffer = buffer;
+                console.log('Loop loaded, duration:', buffer.duration);
+            })
+            .catch(e => console.error('Error loading loop:', e));
+    }
+    
+    // Load level BGM intro
+    if (!levelBGMIntroBuffer) {
+        fetch('audio/levelbgm.ogg')
+            .then(response => response.arrayBuffer())
+            .then(arrayBuffer => audioContext.decodeAudioData(arrayBuffer))
+            .then(buffer => {
+                levelBGMIntroBuffer = buffer;
+                console.log('Level BGM intro loaded, duration:', buffer.duration);
+            })
+            .catch(error => console.error('Error loading level BGM intro:', error));
+    }
+    
+    // Load level BGM loop
+    if (!levelBGMLoopBuffer) {
+        fetch('audio/levelbgmloop.ogg')
+            .then(response => response.arrayBuffer())
+            .then(arrayBuffer => audioContext.decodeAudioData(arrayBuffer))
+            .then(buffer => {
+                levelBGMLoopBuffer = buffer;
+                console.log('Level BGM loop loaded, duration:', buffer.duration);
+            })
+            .catch(error => console.error('Error loading level BGM loop:', error));
+    }
+}
+
+function playLoopBGM() {
+    if (isInGame || !loopBuffer || !audioContext) return;
+    
+    console.log('playLoopBGM called, isPlaying:', isPlaying);
+    
+    // Don't start if already playing
+    if (isPlaying && currentSource) {
+        console.log('Already playing, skipping');
+        return;
+    }
+    
+    // Stop any existing source
+    if (currentSource) {
+        try {
+            currentSource.stop();
+        } catch (e) {
+            // Already stopped
+        }
+    }
+    
+    // Create source for loop
+    currentSource = audioContext.createBufferSource();
+    currentSource.buffer = loopBuffer;
+    currentSource.loop = true;
+    currentSource.loopStart = 0;
+    currentSource.loopEnd = loopBuffer.duration - 0.025; // Slightly before end to avoid gap
+    
+    // Create gain node for volume control
+    const gainNode = audioContext.createGain();
+    gainNode.gain.value = 0.5;
+    
+    currentSource.connect(gainNode);
+    gainNode.connect(audioContext.destination);
+    
+    currentSource.start(0);
+    isPlaying = true;
+    console.log('Loop started');
+}
+
+function playMainBGM() {
+    console.log('playMainBGM called, isInGame:', isInGame, 'hasPlayedIntro:', hasPlayedIntro, 'isPlaying:', isPlaying);
+    
+    if (isInGame) {
+        console.log('Not playing - in game');
+        return;
+    }
+    
+    // Don't start if already playing
+    if (isPlaying && currentSource) {
+        console.log('Already playing, skipping');
+        return;
+    }
+    
+    if (!audioContext) {
+        console.log('No audio context, initializing...');
+        initAudio();
+    }
+    
+    // Resume audio context if suspended (for autoplay policy)
+    if (audioContext && audioContext.state === 'suspended') {
+        console.log('Audio context suspended, resuming...');
+        audioContext.resume().then(() => {
+            console.log('Audio context resumed');
+            playMainBGM(); // Retry after resuming
+        });
+        return;
+    }
+    
+    // Wait for buffers to load before playing
+    if (!introBuffer || !loopBuffer) {
+        console.log('Waiting for buffers to load...', 'intro:', !!introBuffer, 'loop:', !!loopBuffer);
+        setTimeout(() => playMainBGM(), 100);
+        return;
+    }
+    
+    if (!hasPlayedIntro) {
+        console.log('Playing intro for first time');
+        // Stop any existing source
+        if (currentSource) {
+            try {
+                currentSource.stop();
+            } catch (e) {}
+        }
+        
+        // Play intro
+        currentSource = audioContext.createBufferSource();
+        currentSource.buffer = introBuffer;
+        
+        const gainNode = audioContext.createGain();
+        gainNode.gain.value = 0.5;
+        
+        currentSource.connect(gainNode);
+        gainNode.connect(audioContext.destination);
+        
+        // When intro ends, start loop
+        currentSource.onended = () => {
+            console.log('Intro ended');
+            isPlaying = false;
+            // Only continue to loop if still supposed to be playing (not stopped or in game)
+            if (!isInGame && currentSource) {
+                hasPlayedIntro = true;
+                playLoopBGM();
+            }
+        };
+        
+        currentSource.start(0);
+        isPlaying = true;
+        console.log('Intro started, duration:', introBuffer.duration);
+    } else {
+        console.log('Intro already played, playing loop');
+        // Intro already played, just play loop
+        playLoopBGM();
+    }
+}
+
+function stopMainBGM() {
+    console.log('stopMainBGM called');
+    if (currentSource) {
+        try {
+            // Remove the reference before stopping to prevent onended callback
+            const sourceToStop = currentSource;
+            currentSource = null;
+            sourceToStop.stop();
+            isPlaying = false;
+            console.log('Audio stopped');
+        } catch (e) {
+            // Already stopped
+            currentSource = null;
+            isPlaying = false;
+        }
+    }
+}
+
+// Auto-play music when page loads
+window.addEventListener('DOMContentLoaded', () => {
+    // Initialize audio context and load all audio files
+    initAudio();
+    // Preload all sound effects
+    initSoundEffects();
+});
+
+// Modern alert modal functions
+function showModal(message) {
+    const overlay = document.getElementById('modalOverlay');
+    const messageEl = document.getElementById('modalMessage');
+    if (overlay && messageEl) {
+        messageEl.textContent = message;
+        overlay.style.display = 'flex';
+    }
+}
+
+function closeModal() {
+    const overlay = document.getElementById('modalOverlay');
+    if (overlay) {
+        overlay.style.display = 'none';
+    }
+}
+
+// Expose modal functions globally
+window.showModal = showModal;
+window.closeModal = closeModal;
+
 
 // Navigation functions
 function goToModeSelection(mode) {
     console.log('goToModeSelection called with mode:', mode);
+    console.log('startBGM flag:', startBGM);
+    
     currentMode = mode;
     document.getElementById('landingPage').style.display = 'none';
+    
+    // Start BGM on first button click only
+    if (startBGM) {
+        console.log('First mode selection, starting BGM');
+        startBGM = false; // Set to false so it won't start again
+        
+        if (!audioContext) initAudio();
+        
+        // Small delay to ensure audio context is ready
+        setTimeout(() => {
+            if (audioContext && audioContext.state === 'suspended') {
+                console.log('Audio context suspended, resuming...');
+                audioContext.resume().then(() => {
+                    console.log('Audio context resumed, starting playback');
+                    playMainBGM();
+                });
+            } else {
+                console.log('Audio context ready, starting playback');
+                playMainBGM();
+            }
+        }, 100);
+    }
     
     if (mode === 'multiplayer') {
         // Show multiplayer mode selection page (Collab/Compete)
@@ -25,15 +456,44 @@ function goBackToLanding() {
     document.getElementById('subjectPage').style.display = 'none';
     document.getElementById('multiplayerPage').style.display = 'none';
     document.getElementById('landingPage').style.display = 'flex';
+    
+    // Resume background music when returning to landing
+    isInGame = false;
+    playMainBGM();
 }
 
 function goBackToSubjects() {
+    console.log('goBackToSubjects called');
     document.getElementById('chatContainer').style.display = 'none';
     document.getElementById('subjectPage').style.display = 'flex';
-}
+    
+    // Resume background music when returning to subject selection
+    isInGame = false;
+    console.log('Setting isInGame to false, calling playMainBGM');
+    playMainBGM();
+}// Start BGM on first button click only
+    if (!hasPlayedIntro && !isPlaying) {
+        console.log('First mode selection, starting BGM');
+        if (!audioContext) initAudio();
+        
+        if (audioContext && audioContext.state === 'suspended') {
+            audioContext.resume().then(() => {
+                console.log('Audio context resumed');
+                playMainBGM();
+            });
+        } else {
+            playMainBGM();
+        }
+    }
+    
+    
 
 function startChat(subject) {
     currentSubject = subject;
+    
+    // Stop background music when entering game
+    isInGame = true;
+    stopMainBGM();
     
     // Check if multiplayer mode
     if (currentMode === 'multiplayer') {
@@ -605,6 +1065,11 @@ async function createQuizTable(quizData) {
     
     container.appendChild(grid);
     
+    // Play level BGM when quiz appears
+    if (window.playLevelBGM) {
+        window.playLevelBGM();
+    }
+    
     // Notify that question UI is ready (buttons are clickable) - for multiplayer
     if (window.multiplayerMode && typeof window.notifyQuestionReady === 'function') {
         // Use setTimeout to ensure buttons are fully rendered in DOM
@@ -633,6 +1098,11 @@ async function handleAnswerSelection(selectedRow, selectedIndex, correctAnswer, 
     
     table.classList.add('answered');
     
+    // Stop level BGM when answer is selected
+    if (window.stopLevelBGM) {
+        window.stopLevelBGM();
+    }
+    
     const rows = table.querySelectorAll('.quiz-option');
     
     // In multiplayer, don't verify answer on client - server will do it after timer stops
@@ -657,6 +1127,21 @@ async function handleAnswerSelection(selectedRow, selectedIndex, correctAnswer, 
     // Singleplayer: reveal immediately using the AI-verified correctAnswer from server
     const aiVerifiedAnswer = window.currentCorrectAnswer;
     console.log('[Singleplayer] Using AI-verified answer:', aiVerifiedAnswer, 'Selected:', selectedIndex);
+    
+    // Determine if answer is correct
+    let isCorrect = false;
+    if (aiVerifiedAnswer !== undefined) {
+        isCorrect = (selectedIndex === aiVerifiedAnswer);
+    } else if (correctAnswer !== undefined) {
+        isCorrect = (selectedIndex === correctAnswer);
+    }
+    
+    // Play sound effect
+    if (isCorrect) {
+        playCorrectSound();
+    } else {
+        playWrongSound();
+    }
     
     rows.forEach((row, index) => {
         row.style.pointerEvents = 'none';
@@ -696,6 +1181,11 @@ async function handleAnswerSelection(selectedRow, selectedIndex, correctAnswer, 
         continueBtn.className = 'quiz-action-btn continue-btn';
         continueBtn.textContent = 'Continue';
         continueBtn.addEventListener('click', () => {
+            // Play next question sound
+            if (window.playNextQuestionSound) {
+                window.playNextQuestionSound();
+            }
+            
             // Generate new question
             if (!chatMessages) chatMessages = document.getElementById('chatMessages');
             chatMessages.innerHTML = '';
@@ -769,5 +1259,18 @@ window.startChat = startChat;
 window.addMessage = addMessage;
 window.getCurrentSubject = () => currentSubject;
 window.setCurrentSubject = (subject) => { currentSubject = subject; };
+window.playMainBGM = playMainBGM;
+window.stopMainBGM = stopMainBGM;
+window.playCorrectSound = playCorrectSound;
+window.playWrongSound = playWrongSound;
+window.playLevelFirstBGM = playLevelFirstBGM;
+window.stopLevelFirstBGM = stopLevelFirstBGM;
+window.playLevelUpSound = playLevelUpSound;
+window.stopLevelUpSound = stopLevelUpSound;
+window.playNextQuestionSound = playNextQuestionSound;
+window.playLevelFailedSound = playLevelFailedSound;
+window.stopLevelFailedSound = stopLevelFailedSound;
+window.playLevelBGM = playLevelBGM;
+window.stopLevelBGM = stopLevelBGM;
 
 console.log('Global functions registered successfully');

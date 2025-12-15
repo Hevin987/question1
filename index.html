@@ -2,11 +2,17 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <link rel="stylesheet" href="styles.css">
     <title>Quest Game like quiz planet</title>
 </head>
 <body>
+    <!-- Audio elements with autoplay -->
+    <audio id="mainBGMIntro" src="audio/mainbgm.ogg" preload="auto"></audio>
+    <audio id="mainBGMLoop" src="audio/mainbgmloop.ogg" preload="auto" loop></audio>
+    
     <script src="script/multiplayer.js"></script>
     <script src="script/main.js"></script>
     <!-- Page 1: Landing Page -->
@@ -297,6 +303,15 @@
             <div class="whistler-bar"></div>
             <div class="whistler-bar"></div>
             <div class="whistler-bar"></div>
+        </div>
+    </div>
+
+    <!-- Modern Alert Modal -->
+    <div class="modal-overlay" id="modalOverlay" style="display: none;">
+        <div class="modal-content">
+            <div class="modal-icon">⚠️</div>
+            <div class="modal-message" id="modalMessage"></div>
+            <button class="modal-button" onclick="closeModal()">OK</button>
         </div>
     </div>
 </body>
