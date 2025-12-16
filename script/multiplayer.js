@@ -627,11 +627,6 @@ function startMultiplayerGame() {
         return;
     }
     
-    // Stop background music when starting game
-    if (window.stopMainBGM) {
-        window.stopMainBGM();
-    }
-    
     // Emit to server to start game for all players
     console.log('Emitting startGame event');
     socket.emit('startGame', { roomCode: currentRoomCode });

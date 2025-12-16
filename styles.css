@@ -1,3 +1,5 @@
+@import url('https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@100..900&family=Nunito:ital,wght@0,200..1000;1,200..1000&display=swap');
+
 * {
     margin: 0;
     padding: 0;
@@ -14,7 +16,7 @@ html {
 }
 
 body {
-    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Helvetica', 'Arial', sans-serif;
+    font-family: -apple-system, BlinkMacSystemFont, 'Consolas', 'Roboto', 'Helvetica',"Josefin Sans", sans-serif;
     background: #000;
     min-height: 100vh;
     min-height: -webkit-fill-available;
@@ -32,6 +34,11 @@ body {
     right: 0;
     bottom: 0;
     width: 100vw;
+}
+
+img{
+    width: 30%;
+    height: auto;
 }
 
 /* 9:16 aspect ratio container */
@@ -142,6 +149,7 @@ body {
 }
 
 .button-title {
+    font-family: 'Hurmit Nerd Font', sans-serif;
     font-size: 16px;
     font-weight: 600;
     color: white;
@@ -149,6 +157,7 @@ body {
 }
 
 .button-desc {
+    font-family: 'Hurmit Nerd Font', sans-serif;
     font-size: 13px;
     color: #8e8e93;
 }
@@ -222,6 +231,7 @@ body {
 }
 
 .subject-title {
+    font-family: "Nunito", sans-serif;
     font-size: 28px;
     font-weight: 700;
     color: white;
@@ -285,6 +295,7 @@ body {
 .subject-card.selected .subject-name {
     color: white;
     font-weight: 600;
+    font-family: 'Nunito', sans-serif;
 }
 
 .subject-icon {
@@ -301,8 +312,9 @@ body {
 }
 
 .subject-name {
+    font-family: 'nunito', sans-serif;
     font-size: 17px;
-    font-weight: 600;
+    font-weight: 1000;
     color: white;
 }
 
@@ -564,7 +576,7 @@ body {
 }
 
 .modal-icon {
-    font-size: 48px;
+    size: 48px;
     margin-bottom: 16px;
 }
 
@@ -744,7 +756,7 @@ body {
 .quiz-table {
     width: 100%;
     display: grid;
-    grid-template-columns: 1fr 1fr;
+    grid-template-columns: 50% 50%;
     gap: 12px;
 }
 
@@ -1332,4 +1344,33 @@ body {
 
 .level-continue-btn:active {
     transform: scale(0.98);
+}
+
+@font-face {
+    font-family: Consolas;
+    src: url("font/Consola.ttf") format("truetype");
+    font-weight: normal;
+    font-style: normal;
+    font-display: swap;
+}
+@font-face {
+    font-family: Consolas;
+    src: url("font/Consolab.ttf") format("truetype");
+    font-weight: bold;
+    font-style: normal;
+    font-display: swap;
+}
+@font-face {
+    font-family: 'Hurmit Nerd Font';
+    src: url("font/HurmitNerdFontMono-Bold.otf") format("opentype");
+    font-weight: normal;
+    font-style: normal;
+    font-display: swap;
+}
+@font-face {
+    font-family: 'Hurmit Nerd Font';
+    src: url("font/HurmitNerdFontMono-Bold.otf") format("opentype");
+    font-weight: bold;
+    font-style: normal;
+    font-display: swap;
 }
