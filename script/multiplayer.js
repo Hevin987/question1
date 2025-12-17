@@ -48,6 +48,50 @@ function connectSocket() {
     // Auto-detect server URL (works locally and in production)
     const serverUrl = window.location.origin;
     socket = io(serverUrl);
+
+    // Listen for collabWrongAnswer event to sync game over for all players
+    socket.on('collabWrongAnswer', ({ playerName: pName, selectedIndex }) => {
+        // Only in collab mode
+        if (multiplayerType !== 'collab') return;
+        // Show wrong answer UI and game over for all
+        const quizTables = document.querySelectorAll('.quiz-table');
+        const currentTable = quizTables[quizTables.length - 1];
+        if (currentTable && !currentTable.classList.contains('answered')) {
+            currentTable.classList.add('answered');
+            const rows = currentTable.querySelectorAll('.quiz-option');
+            rows.forEach((row, index) => {
+                row.style.pointerEvents = 'none';
+                if (index === selectedIndex) {
+                    row.classList.add('incorrect');
+                    row.style.opacity = '0.7';
+                    row.style.backgroundColor = '#2c2c2e';
+                }
+            });
+            addSystemMessage(`❌ ${pName} selected a wrong answer! Game Over in Collab Mode.`);
+            // Show continue button to view level screen
+            const quizContainer = currentTable.closest('.quiz-container');
+            if (quizContainer && !quizContainer.querySelector('.quiz-actions')) {
+                const actionsDiv = document.createElement('div');
+                actionsDiv.className = 'quiz-actions';
+                const continueBtn = document.createElement('button');
+                continueBtn.className = 'quiz-action-btn continue-btn';
+                continueBtn.textContent = 'Continue';
+                continueBtn.style.width = '100%';
+                continueBtn.addEventListener('click', () => {
+                    if (socket && currentRoomCode) {
+                        socket.emit('playerContinue', {
+                            roomCode: currentRoomCode,
+                            action: 'gameOverLevelScreen'
+                        });
+                    }
+                    showLevelScreen('failed');
+                });
+                actionsDiv.appendChild(continueBtn);
+                quizContainer.appendChild(actionsDiv);
+            }
+        }
+    });
+    // (Removed duplicate socket initialization)
     
     socket.on('roomCreated', ({ roomCode, playerName: pName }) => {
         currentRoomCode = roomCode;
@@ -208,10 +252,15 @@ function connectSocket() {
                 'Previous answer was correct.' : 
                 'Previous answer was incorrect.';
             conversationHistory.push({ role: 'user', content: answerFeedback });
-            
-            // Check if game should end in collab mode
-            if (multiplayerType === 'collab' && !myAnswer.isCorrect) {
+        }
+        
+        // In collab mode, check if ANY answer is wrong (not just current player's)
+        if (multiplayerType === 'collab') {
+            const hasWrongAnswer = playerAnswers.some(p => !p.isCorrect);
+            if (hasWrongAnswer) {
                 isWrongInCollab = true;
+                // Update level status for all players if wrong answer exists
+                levelStatus[currentLevel] = 'incorrect';
             }
         }
         
@@ -259,7 +308,7 @@ function connectSocket() {
             if (isWrongInCollab) {
                 addSystemMessage('❌ Wrong answer! Game Over in Collab Mode.');
                 
-                // Add continue button to show level screen with results
+                // Add continue button to show level screen with results (for all players)
                 const quizContainer = currentTable.closest('.quiz-container');
                 if (quizContainer && !quizContainer.querySelector('.quiz-actions')) {
                     const actionsDiv = document.createElement('div');
@@ -270,13 +319,14 @@ function connectSocket() {
                     continueBtn.textContent = 'Continue';
                     continueBtn.style.width = '100%';
                     continueBtn.addEventListener('click', () => {
-                        // Notify server
+                        // Notify server - this will sync to all players
                         if (socket && currentRoomCode) {
                             socket.emit('playerContinue', { 
                                 roomCode: currentRoomCode, 
                                 action: 'gameOverLevelScreen'
                             });
                         }
+                        // Show level screen immediately for this player
                         showLevelScreen('failed');
                     });
                     
@@ -385,7 +435,11 @@ function connectSocket() {
     
     socket.on('playerContinued', ({ action, playerName: pName, scores }) => {
         console.log('Player continued:', pName, action);
-        addSystemMessage(`${pName} clicked continue`);
+        
+        // Only show message if it's not from current player (to avoid duplicate messages)
+        if (pName !== playerName) {
+            addSystemMessage(`${pName} clicked continue`);
+        }
         
         if (action === 'showScore') {
             // Compete mode: show score screen to all players
@@ -395,7 +449,8 @@ function connectSocket() {
                 console.error('No scores data received for showScore action');
             }
         } else if (action === 'gameOverLevelScreen') {
-            // Collab mode game over: show level screen with results
+            // Collab mode game over: show level screen with results for all players
+            // This ensures all players see the level screen when any player clicks continue
             showLevelScreen('failed');
         } else if (action === 'levelScreen') {
             // Collab mode: automatically show level screen for all players
@@ -576,6 +631,29 @@ function showWaitingRoom(roomCode) {
     document.getElementById('roomSetupPage').style.display = 'none';
     document.getElementById('waitingRoomPage').style.display = 'flex';
     document.getElementById('displayRoomCode').textContent = roomCode;
+
+    // Dynamically render subject grid from window.SUBJECTS, retry if not ready
+    const grid = document.getElementById('subjectGridMulti');
+    if (!grid) return;
+    if (!window.SUBJECTS) {
+        setTimeout(() => showWaitingRoom(roomCode), 100);
+        return;
+    }
+    grid.innerHTML = '';
+    grid.classList.remove('grid-2x3', 'grid-2x2');
+    grid.classList.add('grid-2x2');
+        window.SUBJECTS.forEach(subj => {
+        const btn = document.createElement('button');
+        btn.className = 'subject-card';
+        btn.onclick = () => {
+            if (window.selectRoomSubject) window.selectRoomSubject(subj.id);
+        };
+        btn.innerHTML = `
+            <div class="subject-icon"><img class="subject-icon" src="${subj.image}" alt="${subj.name}"></div>
+            <div class="subject-name">${subj.name}</div>
+        `;
+        grid.appendChild(btn);
+    });
 }
 
 function updatePlayersList(players) {

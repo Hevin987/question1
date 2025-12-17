@@ -423,6 +423,21 @@ function calculateSimilarity(str1, str2) {
 }
 
 io.on('connection', (socket) => {
+        // Collab mode: handle wrong answer and set game over
+        socket.on('collabWrongAnswer', ({ roomCode, playerName, selectedIndex }) => {
+            const room = rooms.get(roomCode);
+            if (!room || room.mode !== 'collab') return;
+            // Mark game as over
+            room.gameOver = true;
+            // Optionally clear timers
+            if (room.answerTimer) {
+                clearTimeout(room.answerTimer);
+                room.answerTimer = null;
+            }
+            // Broadcast to all players (UI already handled on client)
+            io.to(roomCode).emit('collabWrongAnswer', { playerName, selectedIndex });
+            console.log(`[Collab] Game over in room ${roomCode} due to wrong answer by ${playerName}`);
+        });
     console.log('Player connected:', socket.id);
 
     // Create or join room
@@ -467,7 +482,7 @@ io.on('connection', (socket) => {
     // Request new question
     socket.on('requestQuestion', async ({ roomCode, conversationHistory }) => {
         const room = rooms.get(roomCode);
-        if (!room) return;
+        if (!room || room.gameOver) return;
 
         try {
             // Update room conversation history if provided
@@ -757,7 +772,7 @@ Generate the question now using ONLY the XML format above:`;
     // Client confirms question UI is ready (buttons rendered)
     socket.on('questionReady', ({ roomCode }) => {
         const room = rooms.get(roomCode);
-        if (!room) return;
+        if (!room || room.gameOver) return;
 
         // Clear any existing timer
         if (room.answerTimer) {
@@ -981,7 +996,8 @@ Generate the question now using ONLY the XML format above:`;
 
         console.log(`${player.name} clicked continue with action: ${action}`);
         
-        // Broadcast to all OTHER players in the room (not the one who clicked)
+        // Broadcast to all OTHER players in the room (sender already handled locally)
+        // This ensures proper sync when any player clicks continue
         socket.to(roomCode).emit('playerContinued', {
             action: action,
             playerName: player.name,

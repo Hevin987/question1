@@ -3,6 +3,7 @@ let chatMessages;
 
 let currentMode = 'singleplayer'; // 'singleplayer' or 'multiplayer'
 let currentSubject = 'History'; // Selected subject
+let CurrentSubjectTitle = ''; // Current subject title for display
 
 // Audio management
 let audioContext = null;
@@ -413,6 +414,53 @@ window.closeModal = closeModal;
 
 
 // Navigation functions
+// Subject data array (name, image, id)
+window.SUBJECTS = [
+    { name: 'History', image: 'image/hist.png', id: 'History' },
+    { name: 'Science', image: 'image/science.png', id: 'Science' },
+    { name: 'Math', image: 'image/math.png', id: 'Math' },
+    { name: 'Geography', image: 'image/geo.png', id: 'Geography' },
+    { name: 'Minecraft', image: 'image/worldTrigger.png', id: 'Minecraft' },
+
+    // Add more subjects here if needed
+];
+
+function renderSubjectGrid(mode) {
+    // mode: 'singleplayer' or 'multiplayer'
+    const gridId = mode === 'singleplayer' ? 'subjectGridSingle' : 'subjectGridMulti';
+    const grid = document.getElementById(gridId);
+    if (!grid) return;
+    grid.innerHTML = '';
+    // Set grid layout class
+    grid.classList.remove('grid-2x3', 'grid-2x2');
+    grid.classList.add(mode === 'singleplayer' ? 'grid-2x3' : 'grid-2x2');
+    // How many subjects to show (6 for 2x3, 4 for 2x2)
+    const maxSubjects = mode === 'singleplayer' ? 6 : 4;
+    SUBJECTS.slice(0, maxSubjects).forEach(subj => {
+        const btn = document.createElement('button');
+        btn.className = 'subject-card';
+        btn.onclick = () => {
+            if (mode === 'singleplayer') {
+                startChat(subj.id, subj.name);
+            } else {
+                if (window.selectRoomSubject) window.selectRoomSubject(subj.id);
+            }
+        };
+        btn.innerHTML = `
+            <div class="subject-icon"><img class="subject-icon" src="${subj.image}" alt="${subj.name}"></div>
+            <div class="subject-name">${subj.name}</div>
+        `;
+        grid.appendChild(btn);
+    });
+}
+
+// Render subject grids on page show
+window.addEventListener('DOMContentLoaded', () => {
+    renderSubjectGrid('singleplayer');
+    renderSubjectGrid('multiplayer');
+});
+
+// If you want to re-render on mode switch, call renderSubjectGrid('singleplayer') or renderSubjectGrid('multiplayer') as needed.
 function goToModeSelection(mode) {
     console.log('goToModeSelection called with mode:', mode);
     console.log('startBGM flag:', startBGM);
@@ -488,8 +536,9 @@ function goBackToSubjects() {
     
     
 
-function startChat(subject) {
+function startChat(subject, subjectTitle) {
     currentSubject = subject;
+    CurrentSubjectTitle = subjectTitle;
     
     // Stop background music when entering game
     isInGame = true;
@@ -513,7 +562,7 @@ function startChat(subject) {
     
     // Update chat header
     const modeText = 'Singleplayer';
-    document.getElementById('chatTitle').textContent = `${subject} - ${modeText} Mode`;
+    document.getElementById('chatTitle').textContent = `${CurrentSubjectTitle} - ${modeText} Mode`;
     document.getElementById('chatSubtitle').textContent = 'Is it AI or not';
     
     // Clear chat
