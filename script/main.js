@@ -420,7 +420,10 @@ window.SUBJECTS = [
     { name: 'Science', image: 'image/science.png', id: 'Science' },
     { name: 'Math', image: 'image/math.png', id: 'Math' },
     { name: 'Geography', image: 'image/geo.png', id: 'Geography' },
-    { name: 'Minecraft', image: 'image/worldTrigger.png', id: 'Minecraft' },
+    { name: 'Minecraft', image: 'image/worldTrigger.png', id: 'World Trigger TV Series' },
+    { name: 'Music', image: 'image/music.png', id: 'Music Theory' },
+    { name: 'War', image: 'image/war.png', id: 'War' },
+    { name: 'EDM', image: 'image/edm.png', id: 'electonic dance music' }
 
     // Add more subjects here if needed
 ];
@@ -434,9 +437,12 @@ function renderSubjectGrid(mode) {
     // Set grid layout class
     grid.classList.remove('grid-2x3', 'grid-2x2');
     grid.classList.add(mode === 'singleplayer' ? 'grid-2x3' : 'grid-2x2');
-    // How many subjects to show (6 for 2x3, 4 for 2x2)
-    const maxSubjects = mode === 'singleplayer' ? 6 : 4;
-    SUBJECTS.slice(0, maxSubjects).forEach(subj => {
+    
+    // For singleplayer: show all subjects with scrolling in 2x3 grid
+    // For multiplayer: only show first 4 subjects in 2x2 grid
+    const subjectsToShow = mode === 'singleplayer' ? SUBJECTS : SUBJECTS.slice(0, 4);
+    
+    subjectsToShow.forEach(subj => {
         const btn = document.createElement('button');
         btn.className = 'subject-card';
         btn.onclick = () => {
@@ -597,7 +603,7 @@ Generate the question now using ONLY the XML format above:`;
         headers: {
             'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ message: presetQuestion })
+        body: JSON.stringify({ message: presetQuestion , subject: currentSubject}),
     })
     .then(response => {
         if (!response.ok) {
@@ -1247,11 +1253,22 @@ async function handleAnswerSelection(selectedRow, selectedIndex, correctAnswer, 
                 loadingDiv.remove();
             } else {
                 // Singleplayer: fetch from API
-                const presetQuestion = `Make a ${currentSubject.toLowerCase()} question with 4 MC (Multiple Choice) options in JSON format with only {
-                        "question": "...",
-                        "options": ["A": "" , "B": "" , "C": "" , "D": ""],
-                        "answer": ""
-                        } format.`;
+                const presetQuestion = `Make a ${currentSubject.toLowerCase()} multiple choice question with 4 options.
+
+CRITICAL: You MUST respond ONLY in XML format. Do NOT use JSON. Do NOT use any other format.
+
+Required XML structure:
+<question>
+    <text>Your question here</text>
+    <options>
+        <option>First option</option>
+        <option>Second option</option>
+        <option>Third option</option>
+        <option>Fourth option</option>
+    </options>
+</question>
+
+Generate the question now using ONLY the XML format above:`;
                 
                 const apiUrl = window.location.origin + '/chat';
                 fetch(apiUrl, {
@@ -1264,6 +1281,13 @@ async function handleAnswerSelection(selectedRow, selectedIndex, correctAnswer, 
                 .then(response => response.json())
                 .then(async data => {
                     loadingDiv.remove();
+                    
+                    // Store the AI-verified correct answer if provided
+                    if (data.correctAnswer !== undefined) {
+                        window.currentCorrectAnswer = data.correctAnswer;
+                        console.log('[Singleplayer] AI-verified correct answer stored:', data.correctAnswer);
+                    }
+                    
                     await addMessage(data.response, 'ai');
                 })
                 .catch(async error => {
