@@ -431,11 +431,14 @@ window.closeModal = closeModal;
 // Subject data array (name, image, id)
 window.SUBJECTS = [
     { name: 'History', image: 'image/hist.png', id: 'History' },
+    { name: 'Chinese History', image: 'image/chist.png', id: '中文的中國歷史' },
     { name: 'Science', image: 'image/science.png', id: 'Science' },
+    { name: 'Physics', image: 'image/phy.png', id: 'Physics' },
     { name: 'Math', image: 'image/math.png', id: 'Math' },
     { name: 'Geography', image: 'image/geo.png', id: 'Geography' },
-    { name: 'Music', image: 'image/music.png', id: 'Music Theory' },
     { name: 'War', image: 'image/war.png', id: 'War' },
+    { name: 'Music', image: 'image/music.png', id: 'Music Theory' },
+    { name: 'Music Technology', image: 'image/musicTech.png', id: 'Music Technology' },
     { name: 'EDM', image: 'image/edm.png', id: 'electonic dance music' },
     { name: 'World Trigger', image: 'image/worldTrigger.png', id: 'World Trigger TV Series' },
     { name: 'Minecraft', image: 'image/minecraft.png', id: 'Minecraft' }
@@ -1161,7 +1164,7 @@ async function handleAnswerSelection(selectedRow, selectedIndex, correctAnswer, 
     if (table.classList.contains('answered')) return;
     
     // Stop timer IMMEDIATELY at the first line - before any processing
-    const multiplayerState = window.getMultiplayerState();
+    const multiplayerState = typeof window.getMultiplayerState === 'function' ? window.getMultiplayerState() : null;
     const isMultiplayer = multiplayerState && multiplayerState.isActive;
     if (isMultiplayer && typeof window.stopTimer === 'function') {
         window.stopTimer();
