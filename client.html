@@ -1,0 +1,414 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <title>Client Console</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        html, body {
+            width: 100%;
+            height: 100vh;
+            font-family: 'Courier New', monospace;
+            background: #000;
+            color: #e0e0e0;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            overflow: hidden;
+            margin: 0;
+            padding: 0;
+        }
+
+        .console-wrapper {
+            width: 360px;
+            height: 640px;
+            background: #1a1a1a;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+
+        .header {
+            background: #0a0a0a;
+            border-bottom: 2px solid #00ff00;
+            padding: 12px 16px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            box-shadow: 0 2px 10px rgba(0, 255, 0, 0.2);
+            flex-shrink: 0;
+        }
+
+        .header h1 {
+            font-size: 16px;
+            letter-spacing: 1px;
+            text-shadow: 0 0 10px rgba(0, 255, 0, 0.5);
+            color: #00ff00;
+        }
+
+        .status-indicator {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 12px;
+        }
+
+        .status-dot {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            background: #00ff00;
+            box-shadow: 0 0 10px #00ff00;
+            animation: pulse 1s infinite;
+        }
+
+        .status-dot.disconnected {
+            background: #ff3333;
+            box-shadow: 0 0 10px #ff3333;
+            animation: none;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+
+        .console-container {
+            flex: 1;
+            overflow-y: auto;
+            padding: 12px 16px;
+            background: #1a1a1a;
+            border: 1px inset #00ff0033;
+            margin: 0;
+        }
+
+        .console-line {
+            padding: 4px 0;
+            line-height: 1.4;
+            word-wrap: break-word;
+            word-break: break-all;
+            font-size: 13px;
+        }
+
+        .console-line.log { color: #e0e0e0; }
+        .console-line.info { color: #00ccff; }
+        .console-line.warn { color: #ffff00; }
+        .console-line.error { color: #ff3333; }
+        .console-line.success { color: #00ff99; }
+        .console-line.input { color: #00ff00; }
+        .console-line.output { color: #a0a0a0; }
+
+        .console-line-prefix {
+            color: #666;
+            margin-right: 8px;
+        }
+
+        .console-line.input .console-line-prefix {
+            color: #00ff00;
+        }
+
+        /* Scrollbar styling */
+        .console-container::-webkit-scrollbar {
+            width: 6px;
+        }
+
+        .console-container::-webkit-scrollbar-track {
+            background: #1a1a1a;
+        }
+
+        .console-container::-webkit-scrollbar-thumb {
+            background: #00ff0055;
+            border-radius: 3px;
+        }
+
+        .console-container::-webkit-scrollbar-thumb:hover {
+            background: #00ff0099;
+        }
+
+        .input-area {
+            background: #0a0a0a;
+            border-top: 1px solid #333;
+            padding: 8px 16px;
+            display: flex;
+            gap: 8px;
+            flex-shrink: 0;
+            align-items: center;
+        }
+
+        .input-prefix {
+            color: #00ff00;
+            font-size: 13px;
+            flex-shrink: 0;
+        }
+
+        .input-wrapper {
+            flex: 1;
+            min-width: 0;
+            display: flex;
+            gap: 8px;
+            align-items: center;
+        }
+
+        .console-input {
+            flex: 1;
+            background: #2a2a2a;
+            color: #00ff00;
+            border: 1px solid #00ff00;
+            padding: 8px 12px;
+            border-radius: 4px;
+            font-family: 'Courier New', monospace;
+            font-size: 13px;
+            outline: none;
+            transition: border-color 0.2s;
+        }
+
+        .console-input:focus {
+            border-color: #00cc00;
+            box-shadow: 0 0 10px rgba(0, 255, 0, 0.3);
+        }
+
+        .console-input::placeholder {
+            color: #00ff0055;
+        }
+
+        .btn-execute {
+            background: #00ff00;
+            color: #000;
+            border: none;
+            padding: 8px 16px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-weight: bold;
+            font-family: 'Courier New', monospace;
+            font-size: 12px;
+            transition: all 0.2s;
+            box-shadow: 0 0 5px rgba(0, 255, 0, 0.3);
+            flex-shrink: 0;
+            white-space: nowrap;
+        }
+
+        .btn-execute:active {
+            transform: scale(0.95);
+        }
+
+        .btn-clear {
+            background: #ff3333;
+            color: white;
+            border: none;
+            padding: 6px 12px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-weight: bold;
+            font-family: 'Courier New', monospace;
+            font-size: 11px;
+            transition: all 0.2s;
+            box-shadow: 0 0 5px rgba(255, 51, 51, 0.3);
+            flex-shrink: 0;
+        }
+
+        .btn-clear:active {
+            transform: scale(0.95);
+        }
+
+        .footer {
+            background: #0a0a0a;
+            border-top: 1px solid #333;
+            padding: 8px 16px;
+            font-size: 11px;
+            color: #666;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-shrink: 0;
+        }
+
+        .line-count {
+            color: #00ff00;
+        }
+    </style>
+</head>
+<body>
+    <div class="console-wrapper">
+        <div class="header">
+            <h1>💻 CLIENT CONSOLE</h1>
+            <div class="status-indicator">
+                <div class="status-dot" id="statusDot"></div>
+            </div>
+        </div>
+
+        <div class="console-container" id="console">
+            <div class="console-line log"><span class="console-line-prefix">&gt;</span>Client Console Ready</div>
+        </div>
+
+        <div class="input-area">
+            <span class="input-prefix">&gt;</span>
+            <div class="input-wrapper">
+                <input 
+                    type="text" 
+                    class="console-input" 
+                    id="commandInput" 
+                    placeholder="Enter command or JavaScript..."
+                    autocomplete="off"
+                    spellcheck="false"
+                >
+                <button class="btn-execute" onclick="executeCommand()">Execute</button>
+                <button class="btn-clear" onclick="clearConsole()">Clear</button>
+            </div>
+        </div>
+
+        <div class="footer">
+            <span class="line-count">Lines: <span id="lineCount">1</span></span>
+        </div>
+    </div>
+
+    <script>
+        const MAX_LINES = 500;
+        let lineCount = 1;
+        let commandHistory = [];
+        let historyIndex = -1;
+
+        function log(message, type = 'log') {
+            const consoleDiv = document.getElementById('console');
+            const line = document.createElement('div');
+            line.className = `console-line ${type}`;
+            
+            // Escape HTML
+            const escapeHtml = (text) => {
+                const div = document.createElement('div');
+                div.textContent = String(text);
+                return div.innerHTML;
+            };
+
+            if (type === 'input') {
+                line.innerHTML = `<span class="console-line-prefix">&gt;</span>${escapeHtml(message)}`;
+            } else if (type === 'output') {
+                line.innerHTML = `<span class="console-line-prefix">←</span>${escapeHtml(message)}`;
+            } else {
+                line.innerHTML = `<span class="console-line-prefix">[${type.toUpperCase()}]</span>${escapeHtml(message)}`;
+            }
+            
+            consoleDiv.appendChild(line);
+            
+            // Keep only last MAX_LINES
+            const lines = consoleDiv.querySelectorAll('.console-line');
+            if (lines.length > MAX_LINES) {
+                lines[0].remove();
+            }
+            
+            lineCount = consoleDiv.querySelectorAll('.console-line').length;
+            document.getElementById('lineCount').textContent = lineCount;
+            
+            // Auto scroll to bottom
+            consoleDiv.scrollTop = consoleDiv.scrollHeight;
+        }
+
+        function executeCommand() {
+            const input = document.getElementById('commandInput');
+            const command = input.value.trim();
+            
+            if (!command) return;
+            
+            // Log the command
+            log(command, 'input');
+            
+            // Add to history
+            commandHistory.push(command);
+            historyIndex = -1;
+            
+            // Execute
+            try {
+                // Create a safe eval context
+                const result = eval(command);
+                
+                // Log result
+                if (result !== undefined) {
+                    log(String(result), 'output');
+                }
+            } catch (error) {
+                log(`Error: ${error.message}`, 'error');
+            }
+            
+            // Clear input
+            input.value = '';
+            input.focus();
+        }
+
+        function clearConsole() {
+            document.getElementById('console').innerHTML = '';
+            lineCount = 0;
+            document.getElementById('lineCount').textContent = '0';
+            log('Console cleared', 'info');
+            document.getElementById('commandInput').focus();
+        }
+
+        // Keyboard shortcuts
+        document.getElementById('commandInput').addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') {
+                executeCommand();
+            } else if (e.key === 'ArrowUp') {
+                e.preventDefault();
+                if (commandHistory.length > 0) {
+                    historyIndex = Math.min(historyIndex + 1, commandHistory.length - 1);
+                    document.getElementById('commandInput').value = commandHistory[commandHistory.length - 1 - historyIndex];
+                }
+            } else if (e.key === 'ArrowDown') {
+                e.preventDefault();
+                if (historyIndex > -1) {
+                    historyIndex--;
+                    if (historyIndex >= 0) {
+                        document.getElementById('commandInput').value = commandHistory[commandHistory.length - 1 - historyIndex];
+                    } else {
+                        document.getElementById('commandInput').value = '';
+                    }
+                }
+            }
+        });
+
+        // Override console methods
+        const originalLog = console.log;
+        const originalError = console.error;
+        const originalWarn = console.warn;
+        const originalInfo = console.info;
+
+        console.log = function(...args) {
+            originalLog(...args);
+            log(args.map(a => String(a)).join(' '), 'log');
+        };
+
+        console.error = function(...args) {
+            originalError(...args);
+            log(args.map(a => String(a)).join(' '), 'error');
+        };
+
+        console.warn = function(...args) {
+            originalWarn(...args);
+            log(args.map(a => String(a)).join(' '), 'warn');
+        };
+
+        console.info = function(...args) {
+            originalInfo(...args);
+            log(args.map(a => String(a)).join(' '), 'info');
+        };
+
+        // Focus input on load
+        window.addEventListener('load', () => {
+            document.getElementById('commandInput').focus();
+            log('Type commands to execute', 'info');
+        });
+
+        // Prevent zoom on input focus (mobile)
+        const input = document.getElementById('commandInput');
+        input.addEventListener('touchstart', () => {
+            document.body.style.zoom = 1;
+        });
+    </script>
+</body>
+</html>

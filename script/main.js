@@ -12,6 +12,8 @@
 // STEP 8: Results are revealed to all player(s)
 // ============================================================================
 
+//command selectRoomSubject('History')
+
 // Get elements (will be accessed when needed, not immediately)
 let chatMessages;
 
@@ -432,6 +434,7 @@ window.closeModal = closeModal;
 window.SUBJECTS = [
     { name: 'History', image: 'image/hist.png', id: 'History' },
     { name: 'Chinese History', image: 'image/chist.png', id: '中文的中國歷史' },
+    { name: 'Cantonese', image: 'image/canton.webp', id: '粵語' },
     { name: 'Science', image: 'image/science.png', id: 'Science' },
     { name: 'Physics', image: 'image/phy.png', id: 'Physics' },
     { name: 'Math', image: 'image/math.png', id: 'Math' },

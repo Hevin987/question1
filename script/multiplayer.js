@@ -716,7 +716,7 @@ function selectRoomSubject(subject) {
     if (socket && currentRoomCode) {
         socket.emit('setSubject', { roomCode: currentRoomCode, subject: subject });
     }
-}}
+}
 
 function startMultiplayerGame() {
     console.log('startMultiplayerGame called');

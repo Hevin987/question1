@@ -1,0 +1,458 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Server Console</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Courier New', monospace;
+            background: linear-gradient(135deg, #1e1e1e 0%, #2d2d2d 100%);
+            color: #00ff00;
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+
+        .header {
+            background: #0a0a0a;
+            border-bottom: 2px solid #00ff00;
+            padding: 15px 20px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            box-shadow: 0 2px 10px rgba(0, 255, 0, 0.2);
+        }
+
+        .header h1 {
+            font-size: 24px;
+            letter-spacing: 2px;
+            text-shadow: 0 0 10px rgba(0, 255, 0, 0.5);
+        }
+
+        .status-indicator {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            font-size: 14px;
+        }
+
+        .status-dot {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            background: #00ff00;
+            box-shadow: 0 0 10px #00ff00;
+            animation: pulse 1s infinite;
+        }
+
+        .status-dot.disconnected {
+            background: #ff3333;
+            box-shadow: 0 0 10px #ff3333;
+            animation: none;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+
+        .controls {
+            background: #1a1a1a;
+            padding: 12px 20px;
+            display: flex;
+            gap: 10px;
+            border-bottom: 1px solid #333;
+            flex-wrap: wrap;
+        }
+
+        .btn {
+            background: #00ff00;
+            color: #000;
+            border: none;
+            padding: 8px 16px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-weight: bold;
+            font-family: 'Courier New', monospace;
+            font-size: 12px;
+            transition: all 0.2s;
+            box-shadow: 0 0 5px rgba(0, 255, 0, 0.3);
+        }
+
+        .btn:hover {
+            background: #00cc00;
+            box-shadow: 0 0 15px rgba(0, 255, 0, 0.6);
+            transform: translateY(-1px);
+        }
+
+        .btn:active {
+            transform: translateY(1px);
+        }
+
+        .btn.danger {
+            background: #ff3333;
+            box-shadow: 0 0 5px rgba(255, 51, 51, 0.3);
+        }
+
+        .btn.danger:hover {
+            background: #ff0000;
+            box-shadow: 0 0 15px rgba(255, 51, 51, 0.6);
+        }
+
+        .filter-group {
+            display: flex;
+            gap: 8px;
+            margin-left: auto;
+            align-items: center;
+        }
+
+        .filter-input {
+            background: #2a2a2a;
+            color: #00ff00;
+            border: 1px solid #00ff00;
+            padding: 6px 12px;
+            border-radius: 4px;
+            font-family: 'Courier New', monospace;
+            font-size: 12px;
+        }
+
+        .filter-input::placeholder {
+            color: #00ff0044;
+        }
+
+        .console-container {
+            flex: 1;
+            overflow-y: auto;
+            padding: 15px 20px;
+            background: #1a1a1a;
+            border: 1px inset #00ff0033;
+            margin: 5px;
+        }
+
+        .console-line {
+            padding: 4px 0;
+            line-height: 1.5;
+            display: flex;
+            align-items: flex-start;
+            word-wrap: break-word;
+            word-break: break-all;
+        }
+
+        .console-line.log { color: #00ff00; }
+        .console-line.info { color: #00ccff; }
+        .console-line.warn { color: #ffff00; }
+        .console-line.error { color: #ff3333; }
+        .console-line.debug { color: #888888; }
+        .console-line.success { color: #00ff99; }
+
+        .timestamp {
+            color: #666;
+            min-width: 100px;
+            margin-right: 10px;
+            flex-shrink: 0;
+        }
+
+        .log-type {
+            color: #888;
+            min-width: 60px;
+            margin-right: 10px;
+            flex-shrink: 0;
+            text-transform: uppercase;
+            font-weight: bold;
+            font-size: 11px;
+        }
+
+        .console-line.log .log-type { color: #00aa00; }
+        .console-line.info .log-type { color: #0099cc; }
+        .console-line.warn .log-type { color: #cccc00; }
+        .console-line.error .log-type { color: #cc0000; }
+        .console-line.debug .log-type { color: #555; }
+        .console-line.success .log-type { color: #00cc66; }
+
+        .message {
+            flex: 1;
+            min-width: 0;
+        }
+
+        /* Scrollbar styling */
+        .console-container::-webkit-scrollbar {
+            width: 8px;
+        }
+
+        .console-container::-webkit-scrollbar-track {
+            background: #1a1a1a;
+        }
+
+        .console-container::-webkit-scrollbar-thumb {
+            background: #00ff0055;
+            border-radius: 4px;
+        }
+
+        .console-container::-webkit-scrollbar-thumb:hover {
+            background: #00ff0099;
+        }
+
+        .footer {
+            background: #0a0a0a;
+            border-top: 1px solid #333;
+            padding: 10px 20px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-size: 12px;
+            color: #666;
+        }
+
+        .line-count {
+            color: #00ff00;
+        }
+
+        .connection-info {
+            color: #00ff00;
+        }
+
+        @media (max-width: 768px) {
+            .header {
+                flex-direction: column;
+                gap: 10px;
+            }
+
+            .controls {
+                flex-direction: column;
+            }
+
+            .filter-group {
+                width: 100%;
+                margin-left: 0;
+            }
+
+            .filter-input {
+                flex: 1;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>🖥️ SERVER CONSOLE</h1>
+        <div class="status-indicator">
+            <div class="status-dot" id="statusDot"></div>
+            <span id="statusText">Connecting...</span>
+        </div>
+    </div>
+
+    <div class="controls">
+        <button class="btn" onclick="clearConsole()">🗑️ Clear Console</button>
+        <button class="btn" onclick="downloadLogs()">⬇️ Download Logs</button>
+        <button class="btn danger" onclick="resetServer()">⚠️ Reset Server</button>
+        <div class="filter-group">
+            <input type="text" class="filter-input" id="filterInput" placeholder="Filter logs..." onkeyup="filterLogs()">
+            <button class="btn" onclick="clearFilter()">Clear Filter</button>
+        </div>
+    </div>
+
+    <div class="console-container" id="console">
+        <!-- Logs will be inserted here -->
+    </div>
+
+    <div class="footer">
+        <span class="line-count">Lines: <span id="lineCount">0</span></span>
+        <span class="connection-info" id="connectionInfo">Not connected</span>
+    </div>
+
+    <script>
+        const MAX_LINES = 1000;
+        let allLogs = [];
+        let filteredLogs = [];
+        let socket = null;
+
+        function initSocket() {
+            const serverUrl = window.location.origin;
+            
+            // Check if Socket.IO is available
+            if (typeof io === 'undefined') {
+                const script = document.createElement('script');
+                script.src = '/socket.io/socket.io.js';
+                script.onload = () => {
+                    connectSocket();
+                };
+                script.onerror = () => {
+                    addLog('Failed to load Socket.IO', 'error');
+                    setStatusDisconnected();
+                };
+                document.head.appendChild(script);
+            } else {
+                connectSocket();
+            }
+        }
+
+        function connectSocket() {
+            const serverUrl = window.location.origin;
+            socket = io(serverUrl);
+
+            socket.on('connect', () => {
+                setStatusConnected();
+                addLog('✓ Connected to server', 'success');
+                socket.emit('subscribeToLogs');
+            });
+
+            socket.on('disconnect', () => {
+                setStatusDisconnected();
+                addLog('✗ Disconnected from server', 'error');
+            });
+
+            socket.on('serverLog', (data) => {
+                addLog(data.message, data.type || 'log', data.timestamp);
+            });
+
+            socket.on('error', (error) => {
+                addLog(`Error: ${error}`, 'error');
+            });
+        }
+
+        function addLog(message, type = 'log', timestamp = null) {
+            const time = timestamp || new Date();
+            const logEntry = { message, type, timestamp: time };
+            
+            allLogs.push(logEntry);
+            
+            // Keep only last MAX_LINES
+            if (allLogs.length > MAX_LINES) {
+                allLogs.shift();
+            }
+            
+            renderLogs();
+            updateLineCount();
+            scrollToBottom();
+        }
+
+        function renderLogs() {
+            const consoleDiv = document.getElementById('console');
+            const filterValue = document.getElementById('filterInput').value.toLowerCase();
+            
+            filteredLogs = allLogs.filter(log => 
+                log.message.toLowerCase().includes(filterValue)
+            );
+            
+            consoleDiv.innerHTML = filteredLogs.map(log => {
+                const timeStr = formatTime(log.timestamp);
+                const typeStr = log.type.toUpperCase();
+                return `
+                    <div class="console-line ${log.type}">
+                        <span class="timestamp">[${timeStr}]</span>
+                        <span class="log-type">${typeStr}</span>
+                        <span class="message">${escapeHtml(log.message)}</span>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        function formatTime(date) {
+            if (typeof date === 'string') {
+                date = new Date(date);
+            }
+            const hours = String(date.getHours()).padStart(2, '0');
+            const minutes = String(date.getMinutes()).padStart(2, '0');
+            const seconds = String(date.getSeconds()).padStart(2, '0');
+            return `${hours}:${minutes}:${seconds}`;
+        }
+
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+
+        function scrollToBottom() {
+            const consoleDiv = document.getElementById('console');
+            consoleDiv.scrollTop = consoleDiv.scrollHeight;
+        }
+
+        function updateLineCount() {
+            document.getElementById('lineCount').textContent = filteredLogs.length;
+        }
+
+        function filterLogs() {
+            renderLogs();
+            updateLineCount();
+            scrollToBottom();
+        }
+
+        function clearFilter() {
+            document.getElementById('filterInput').value = '';
+            filterLogs();
+        }
+
+        function clearConsole() {
+            allLogs = [];
+            renderLogs();
+            updateLineCount();
+            addLog('Console cleared', 'info');
+        }
+
+        function downloadLogs() {
+            const logText = allLogs.map(log => {
+                const time = formatTime(log.timestamp);
+                const type = log.type.toUpperCase();
+                return `[${time}] ${type}: ${log.message}`;
+            }).join('\n');
+
+            const element = document.createElement('a');
+            element.setAttribute('href', 'data:text/plain;charset=utf-8,' + encodeURIComponent(logText));
+            element.setAttribute('download', `server-logs-${Date.now()}.txt`);
+            element.style.display = 'none';
+            document.body.appendChild(element);
+            element.click();
+            document.body.removeChild(element);
+            
+            addLog('Logs downloaded', 'success');
+        }
+
+        function resetServer() {
+            if (confirm('Are you sure you want to reset the server? This will disconnect all players.')) {
+                if (socket) {
+                    socket.emit('resetServer');
+                    addLog('⚠️ Server reset requested', 'warn');
+                }
+            }
+        }
+
+        function setStatusConnected() {
+            const dot = document.getElementById('statusDot');
+            const text = document.getElementById('statusText');
+            dot.classList.remove('disconnected');
+            text.textContent = 'Connected';
+            document.getElementById('connectionInfo').textContent = `Connected to: ${window.location.hostname}`;
+        }
+
+        function setStatusDisconnected() {
+            const dot = document.getElementById('statusDot');
+            const text = document.getElementById('statusText');
+            dot.classList.add('disconnected');
+            text.textContent = 'Disconnected';
+            document.getElementById('connectionInfo').textContent = 'Not connected';
+        }
+
+        // Initialize on page load
+        window.addEventListener('load', () => {
+            addLog('Server Console Initialized', 'info');
+            initSocket();
+        });
+
+        // Auto-scroll to bottom when new content is added
+        const consoleDiv = document.getElementById('console');
+        const observer = new MutationObserver(() => {
+            scrollToBottom();
+        });
+        observer.observe(consoleDiv, { childList: true });
+    </script>
+</body>
+</html>
