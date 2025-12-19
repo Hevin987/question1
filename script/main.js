@@ -438,7 +438,7 @@ window.SUBJECTS = [
     { name: 'Geography', image: 'image/geo.png', id: 'Geography' },
     { name: 'War', image: 'image/war.png', id: 'War' },
     { name: 'Music', image: 'image/music.png', id: 'Music Theory' },
-    { name: 'Music Technology', image: 'image/musicTech.png', id: 'Music Technology' },
+    { name: 'Music Technology', image: 'image/musictech.png', id: 'Music Technology' },
     { name: 'EDM', image: 'image/edm.png', id: 'electonic dance music' },
     { name: 'World Trigger', image: 'image/worldTrigger.png', id: 'World Trigger TV Series' },
     { name: 'Minecraft', image: 'image/minecraft.png', id: 'Minecraft' }
