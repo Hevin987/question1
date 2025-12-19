@@ -1,3 +1,17 @@
+// ============================================================================
+// UNIFIED GAME SEQUENCE (SINGLEPLAYER & MULTIPLAYER):
+// Client-side implementation
+//
+// STEP 1: Game starts (user clicks singleplayer/multiplayer)
+// STEP 2: AI generates question with 4 options (server)
+// STEP 3: AI verifies the answer (server) - if no correct answer, regenerate
+// STEP 4: Question is sent to client(s)
+// STEP 5: Client(s) render UI and timer starts (30 seconds)
+// STEP 6: Player(s) select answer or timer expires
+// STEP 7: Server verifies answer with AI and calculates score
+// STEP 8: Results are revealed to all player(s)
+// ============================================================================
+
 // Get elements (will be accessed when needed, not immediately)
 let chatMessages;
 
@@ -593,6 +607,7 @@ Required XML structure:
         <option>Third option</option>
         <option>Fourth option</option>
     </options>
+    <answer>Index of correct option (0-based)</answer>
 </question>
 
 Generate the question now using ONLY the XML format above:`;
@@ -1180,49 +1195,89 @@ async function handleAnswerSelection(selectedRow, selectedIndex, correctAnswer, 
         return;
     }
     
-    // Singleplayer: reveal immediately using the AI-verified correctAnswer from server
-    const aiVerifiedAnswer = window.currentCorrectAnswer;
-    console.log('[Singleplayer] Using AI-verified answer:', aiVerifiedAnswer, 'Selected:', selectedIndex);
+    // ============================================================================
+    // SINGLEPLAYER: STEP 7-8 - Call server to check answer with AI
+    // ============================================================================
+    console.log('[Singleplayer] STEP 7: Submitting answer to server for AI verification');
     
-    // Determine if answer is correct
-    let isCorrect = false;
-    if (aiVerifiedAnswer !== undefined) {
-        isCorrect = (selectedIndex === aiVerifiedAnswer);
-    } else if (correctAnswer !== undefined) {
-        isCorrect = (selectedIndex === correctAnswer);
-    }
-    
-    // Play sound effect
-    if (isCorrect) {
-        playCorrectSound();
-    } else {
-        playWrongSound();
-    }
-    
-    rows.forEach((row, index) => {
+    // Disable all options while checking
+    rows.forEach(row => {
         row.style.pointerEvents = 'none';
-        
-        if (aiVerifiedAnswer !== undefined) {
-            if (index === aiVerifiedAnswer) {
-                row.classList.add('correct');
-            } else if (index === selectedIndex) {
-                row.classList.add('incorrect');
-            }
-        } else if (correctAnswer !== undefined) {
-            // Fallback to parsed correctAnswer if AI verification not available
-            if (index === correctAnswer) {
-                row.classList.add('correct');
-            } else if (index === selectedIndex) {
-                row.classList.add('incorrect');
-            }
-        } else {
-            if (index === selectedIndex) {
-                row.classList.add('selected');
-            }
-        }
+        row.style.opacity = '0.7';
     });
     
-    // Add action buttons after answering
+    try {
+        // Get all option texts for verification
+        const allOptions = Array.from(rows).map(row => 
+            row.querySelector('.option-text').textContent
+        );
+        
+        // Send to server for AI verification
+        const response = await fetch(window.location.origin + '/checkAnswer', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ 
+                question: question,
+                selectedAnswer: selectedAnswer,
+                allOptions: allOptions,
+                correctAnswerIndex: correctAnswer  // Pass the correct answer index from parsed XML
+            }),
+        });
+        
+        const result = await response.json();
+        const isCorrect = result.isCorrect;
+        const correctAnswerIndex = result.correctAnswerIndex;
+        
+        console.log('[Singleplayer] STEP 8: AI verification complete - Correct: ' + isCorrect);
+        
+        // Play sound effect based on result
+        if (isCorrect) {
+            playCorrectSound();
+        } else {
+            playWrongSound();
+        }
+        
+        // Highlight answers - show what was selected and what was correct
+        rows.forEach((row, index) => {
+            row.style.pointerEvents = 'none';
+            
+            // Show correct answer in green
+            if (index === correctAnswerIndex) {
+                row.classList.add('correct');
+            }
+            
+            // Show selected answer (red if wrong)
+            if (index === selectedIndex && !isCorrect) {
+                row.classList.add('incorrect');
+            }
+        });
+        
+    } catch (error) {
+        console.error('[Singleplayer] Error checking answer:', error);
+        
+        // Fallback: use parsed correctAnswer if available
+        const fallbackCorrect = (selectedIndex === correctAnswer);
+        
+        if (fallbackCorrect) {
+            playCorrectSound();
+        } else {
+            playWrongSound();
+        }
+        
+        rows.forEach((row, index) => {
+            row.style.pointerEvents = 'none';
+            
+            if (index === correctAnswer) {
+                row.classList.add('correct');
+            } else if (index === selectedIndex && !fallbackCorrect) {
+                row.classList.add('incorrect');
+            }
+        });
+    }
+    
+    // Add action buttons after answer is revealed
     const quizContainer = table.closest('.quiz-container');
     if (quizContainer && !quizContainer.querySelector('.quiz-actions')) {
         const actionsDiv = document.createElement('div');
@@ -1267,6 +1322,7 @@ Required XML structure:
         <option>Third option</option>
         <option>Fourth option</option>
     </options>
+    <answer>Index of correct option (0-based)</answer>
 </question>
 
 Generate the question now using ONLY the XML format above:`;

@@ -39,132 +39,99 @@ function generateRoomCode() {
     return Math.random().toString(36).substring(2, 8).toUpperCase();
 }
 
+// ============================================================================
+// UNIFIED GAME SEQUENCE (SINGLEPLAYER & MULTIPLAYER):
+// STEP 1: Game starts
+// STEP 2: AI generates question with 4 options
+// STEP 3: AI verifies the answer (checks if any option is correct)
+// STEP 4: If no correct answer found => regenerate question (go to STEP 2)
+// STEP 5: If correct answer found => send question to player(s)
+// STEP 6: Start timer (30 seconds)
+// STEP 7: Player(s) answer (or timer expires)
+// STEP 8: AI checks answer(s) and reveals result
+// ============================================================================
+
 // AI API using Hugging Face via OpenAI SDK
+// UNIFIED SINGLEPLAYER ENDPOINT using the unified question generation function
 app.post('/chat', async (req, res) => {
     try {
-        const { message } = req.body;
+        const { message, subject } = req.body;
         
-        console.log('[Message Received]:', message);
+        console.log('[ROUND] Game start - Initiating unified game sequence');
         
-        if (!message) {
-            return res.status(400).json({ error: 'Message is required' });
-        }
-
-        const HF_API_KEY = process.env.HF_API_KEY;
+        // Get subject
+        let currentSubject = subject || 'General';
+        console.log(`[ROUND] STEP 1: Game started for subject: ${currentSubject}`);
         
-        if (!HF_API_KEY) {
+        // Use unified function to generate and validate question
+        // STEP 2 & 3: Generate question and verify answer
+        const result = await generateAndValidateQuestion(
+            currentSubject,
+            [], // No conversation history for singleplayer initial question
+            [], // No askedQuestions tracking for singleplayer
+            'singleplayer'
+        );
+        
+        if (!result.parsedData || result.correctAnswerIndex === -1) {
+            console.error('[ROUND] Failed to generate valid question after multiple attempts');
             return res.status(500).json({ 
-                error: 'API key not configured. Please add HF_API_KEY to .env file' 
+                error: 'Failed to generate valid question',
+                attempts: result.attempts
             });
         }
         
-        // Using Llama 3.2 model via Hugging Face router
-        console.log('[Game] Generating question...');
+        console.log(`[ROUND] STEP 5: Valid question ready (after ${result.attempts} attempts)`);
+        console.log('[ROUND] STEP 6: Timer will start on client side after UI render');
         
-        // Get current subject from request or fallback
-        let currentsubject = req.body.subject;
-        // If not provided, try to get from a room if playerId/roomCode is sent (optional, for multiplayer)
-        if (!currentsubject && req.body.roomCode) {
-            const room = rooms.get(req.body.roomCode);
-            if (room && room.subject) {
-                currentsubject = room.subject;
-            }
-        }
-        // Fallback to a default if still not found
-        if (!currentsubject) {
-            currentsubject = 'General';
-        }
-        let aiResponse = '';
-        let parsedData = null;
-        let correctAnswerIndex = -1;
-        let attempts = 0;
-        let currentMessage = message;
-        
-        // Retry loop: regenerate question if all options are wrong (unlimited retries)
-        while (correctAnswerIndex === -1) {
-            attempts++;
-            console.log(`[Game] Question generation attempt ${attempts} (unlimited retries until valid question)`);
-            
-            const chatCompletion = await client.chat.completions.create({
-                model: AI_MODEL,
-                messages: [
-                    {
-                        role: "user",
-                        content: currentMessage,
-                    },
-                ],
-                max_tokens: 500,
-                temperature: Math.min(1.2, 0.7 + (attempts * 0.15)), // Increase temperature more aggressively on retries (cap at 1.2)
-            });
-
-            aiResponse = chatCompletion.choices[0].message.content;
-            console.log('[Original AI Response - Singleplayer]:', aiResponse);
-            console.log('[Response Length]:', aiResponse.length);
-            
-            // Parse and log the question
-            parsedData = parseQuizJSON(aiResponse);
-            if (parsedData) {
-                console.log('[Game] Question generated:', parsedData.question);
-                console.log('[Game] Response length:', aiResponse?.length || 0);
-                
-                // Verify correct answer with AI (check all options one by one)
-                console.log('[Game] Verifying correct answer with AI...');
-                correctAnswerIndex = await findCorrectAnswerWithAI(parsedData.question, parsedData.options);
-                
-                if (correctAnswerIndex === -1) {
-                    console.log(`[Game] ✗ All options are wrong! The question doesn't match the options.`);
-                    console.log(`[Game] Regenerating with COMPLETELY DIFFERENT question (attempt ${attempts + 1})...`);
-                    
-                    // Create regeneration prompt - demand a completely different topic but same subject
-                    currentMessage = `The previous question was invalid because none of the options were correct answers.
-
-IMPORTANT: Generate a COMPLETELY DIFFERENT ${currentsubject} question about a DIFFERENT TOPIC within ${currentsubject}. Do NOT rephrase the same question. Do NOT use similar options. Stay within the ${currentsubject} subject.
-
-Generate the question with 4 options where ONE option is DEFINITELY the correct answer.
-
-CRITICAL: You MUST respond ONLY in XML format. Do NOT use JSON. Do NOT use any other format.
-
-Required XML structure:
-<question>
-    <text>Your question here</text>
-    <options>
-        <option>First option</option>
-        <option>Second option</option>
-        <option>Third option</option>
-        <option>Fourth option</option>
-    </options>
-</question>
-
-Make sure ONE of the four options is definitely the correct answer to your question. Generate the question now using ONLY the XML format above:`;
-                } else {
-                    console.log(`[Game] ✓ Valid question found with correct answer: Option ${correctAnswerIndex + 1}`);
-                }
-            } else {
-                console.log('[Game] Warning: Could not parse XML from response');
-                console.log('[Game] Response length:', aiResponse?.length || 0);
-                console.log('[Game] Response preview:', aiResponse.substring(0, 200));
-                break; // Exit loop if parsing fails
-            }
-        }
-        
-        if (parsedData) {
-            // At this point, correctAnswerIndex should always be >= 0 (found by unlimited retries)
-            parsedData.answer = correctAnswerIndex;
-            
-            // Return both the raw response and parsed data with verified answer
-            res.json({ 
-                response: aiResponse,
-                correctAnswer: correctAnswerIndex 
-            });
-        } else {
-            console.log('[Game] Error: Could not generate valid question');
-            res.json({ response: aiResponse });
-        }
+        // Return both the raw response and verified answer
+        res.json({ 
+            response: result.aiResponse,
+            correctAnswer: result.correctAnswerIndex 
+        });
 
     } catch (error) {
-        console.error('Error:', error);
+        console.error('[ROUND] Error in unified game sequence:', error);
         res.status(500).json({ 
-            error: 'Failed to get AI response',
+            error: 'Failed to initiate game',
+            details: error.message 
+        });
+    }
+});
+
+// ============================================================================
+// STEP 7-8: SINGLEPLAYER ANSWER CHECK WITH AI
+// Verifies player answer and reveals result
+// ============================================================================
+app.post('/checkAnswer', async (req, res) => {
+    try {
+        const { question, selectedAnswer, allOptions, correctAnswerIndex } = req.body;
+        
+        if (!question || !selectedAnswer || !allOptions || correctAnswerIndex === undefined) {
+            return res.status(400).json({ error: 'Missing required fields' });
+        }
+        
+        console.log('[ROUND] STEP 7-8: Checking answer...');
+        console.log(`Question: "${question.substring(0, 60)}..."`);
+        console.log(`Selected: "${selectedAnswer}" (Index: ${allOptions.indexOf(selectedAnswer)})`);
+        console.log(`Correct: "${allOptions[correctAnswerIndex]}" (Index: ${correctAnswerIndex})`);
+        
+        // STEP 7-8: Compare indices directly (answer already verified during question generation)
+        const selectedIndex = allOptions.indexOf(selectedAnswer);
+        const isCorrect = (selectedIndex === correctAnswerIndex);
+        
+        console.log(`Result: ${isCorrect ? '✓ CORRECT' : '✗ INCORRECT'}`);
+        
+        // Return verification result
+        res.json({ 
+            isCorrect: isCorrect,
+            correctAnswerIndex: correctAnswerIndex,
+            selectedIndex: selectedIndex
+        });
+        
+    } catch (error) {
+        console.error('[ROUND] Error checking answer:', error);
+        res.status(500).json({ 
+            error: 'Failed to check answer',
             details: error.message 
         });
     }
@@ -427,7 +394,7 @@ Respond with ONLY one word: "YES" if correct, "NO" if incorrect or inaccurate.`;
         });
 
         const aiResponse = chatCompletion.choices[0].message.content.toLowerCase().trim();
-        console.log('[Original AI Response - Answer Verification]:', aiResponse);
+        console.log('[Original AI Response - Answer Verification]:', chatCompletion.choices[0].message.content);
         console.log(`[AI Response] AI says: "${aiResponse}"`);
         
         // Check for various yes/no variations
@@ -471,6 +438,163 @@ async function findCorrectAnswerWithAI(question, options) {
     
     console.log('  Warning: No correct answer found among all options');
     return -1; // Return -1 to indicate no correct answer found
+}
+
+// ============================================================================
+// UNIFIED QUESTION GENERATION FUNCTION
+// Applies to both singleplayer and multiplayer
+// STEP 2 & 3: Generate question and verify answer
+// ============================================================================
+async function generateAndValidateQuestion(subject, conversationHistory = [], askedQuestions = [], mode = 'singleplayer') {
+    let attempts = 0;
+    let isDuplicate = true;
+    let isValidJSON = false;
+    let correctAnswerIndex = -1;
+    let aiResponse = '';
+    let parsedData = null;
+    
+    // Unlimited retries until we get valid question with correct answer
+    while (isDuplicate || !isValidJSON || correctAnswerIndex === -1) {
+        attempts++;
+        console.log(`[${mode.toUpperCase()}] Attempt ${attempts}: Generating question...`);
+        
+        const baseMessage = `Generate a ${subject.toLowerCase()} multiple choice question with 4 options.
+
+CRITICAL: You MUST respond ONLY in XML format. Do NOT use JSON. Do NOT use any other format.
+
+Required XML structure:
+<question>
+    <text>Your question here</text>
+    <options>
+        <option>First option</option>
+        <option>Second option</option>
+        <option>Third option</option>
+        <option>Fourth option</option>
+    </options>
+    <answer>Index of correct option (0-based)</answer>
+</question>
+
+Generate the question now using ONLY the XML format above:`;
+        
+        // Build messages array with conversation history for context
+        const messages = [];
+        
+        // Add conversation history for context (last 10 messages)
+        if (conversationHistory && conversationHistory.length > 0) {
+            const recentHistory = conversationHistory.slice(-10);
+            messages.push(...recentHistory);
+        }
+        
+        // Add instruction to avoid duplicates or fix format if this is a retry
+        if (attempts > 1) {
+            if (!isValidJSON) {
+                messages.push({ 
+                    role: "system", 
+                    content: "The previous response was invalid. Generate VALID XML format with all tags properly closed."
+                });
+            } else if (isDuplicate) {
+                messages.push({ 
+                    role: "system", 
+                    content: `Generate a completely different ${subject.toLowerCase()} question than before. Stay within the ${subject} subject but use a different topic or concept.`
+                });
+            } else if (correctAnswerIndex === -1) {
+                messages.push({ 
+                    role: "system", 
+                    content: `The previous question had no correct answer. Generate a ${subject.toLowerCase()} question where ONE of the four options is DEFINITELY the correct answer.`
+                });
+            }
+        }
+        
+        // Add current question request
+        messages.push({ role: "user", content: baseMessage });
+        
+        try {
+            const chatCompletion = await client.chat.completions.create({
+                model: AI_MODEL,
+                messages: messages,
+                max_tokens: 500,
+                temperature: Math.min(1.2, 0.7 + (attempts * 0.15)), // Increase temperature on retries
+            });
+
+            aiResponse = chatCompletion.choices[0].message.content;
+            console.log(`[${mode.toUpperCase()}] Response received, length: ${aiResponse.length}`);
+            
+            // Parse the question
+            parsedData = parseQuizJSON(aiResponse);
+            
+            if (!parsedData) {
+                console.log(`[${mode.toUpperCase()}] Attempt ${attempts}: Failed to parse XML`);
+                isValidJSON = false;
+                isDuplicate = true;
+                continue;
+            }
+            
+            // Valid XML!
+            isValidJSON = true;
+            console.log(`[${mode.toUpperCase()}] Attempt ${attempts}: Valid XML parsed`);
+            
+            // Check for duplicates (only for multiplayer with askedQuestions)
+            if (mode === 'multiplayer' && askedQuestions && askedQuestions.length > 0) {
+                const newQuestion = parsedData.question.toLowerCase().trim();
+                let maxSimilarity = 0;
+                let mostSimilarQuestion = '';
+                
+                isDuplicate = askedQuestions.some(asked => {
+                    const similarity = calculateSimilarity(asked, newQuestion);
+                    if (similarity > maxSimilarity) {
+                        maxSimilarity = similarity;
+                        mostSimilarQuestion = asked;
+                    }
+                    return similarity > 0.5; // 50% similarity threshold
+                });
+                
+                if (isDuplicate) {
+                    console.log(`[${mode.toUpperCase()}] Attempt ${attempts}: Duplicate detected (${(maxSimilarity * 100).toFixed(1)}% similar)`);
+                    console.log(`  New: "${newQuestion.substring(0, 60)}..."`);
+                    console.log(`  Old: "${mostSimilarQuestion.substring(0, 60)}..."`);
+                    continue;
+                }
+            } else {
+                isDuplicate = false; // Singleplayer doesn't check duplicates
+            }
+            
+            console.log(`[${mode.toUpperCase()}] Attempt ${attempts}: Question is unique, verifying answer...`);
+            
+            // STEP 3: Verify the answer provided in the XML
+            // Use the answer index from the XML (AI already decided which is correct)
+            correctAnswerIndex = parsedData.answer;
+            
+            // Just verify that the AI-provided answer is actually correct
+            const aiProvidedAnswer = parsedData.options[correctAnswerIndex];
+            const isAnswerCorrect = await verifyAnswerWithAI(parsedData.question, aiProvidedAnswer);
+            
+            console.log(`[${mode.toUpperCase()}] Verifying AI-provided answer: Option ${correctAnswerIndex + 1} ("${aiProvidedAnswer.substring(0, 50)}...")`);
+            
+            if (!isAnswerCorrect) {
+                console.log(`[${mode.toUpperCase()}] Attempt ${attempts}: AI-provided answer is WRONG! Regenerating...`);
+                isValidJSON = false;
+            } else {
+                console.log(`[${mode.toUpperCase()}] Attempt ${attempts}: ✓ Valid question with correct answer: Option ${correctAnswerIndex + 1}`);
+                
+                // Store the question in askedQuestions for multiplayer
+                if (mode === 'multiplayer' && askedQuestions) {
+                    askedQuestions.push(parsedData.question);
+                    console.log(`  Total questions in round: ${askedQuestions.length}`);
+                }
+            }
+        } catch (error) {
+            console.error(`[${mode.toUpperCase()}] Error generating question:`, error.message);
+            isValidJSON = false;
+        }
+    }
+    
+    // Return the generated question with validated answer
+    return {
+        aiResponse: aiResponse,
+        parsedData: parsedData,
+        correctAnswerIndex: correctAnswerIndex,
+        attempts: attempts
+    };
 }
 
 // Helper function to calculate text similarity
@@ -550,14 +674,17 @@ io.on('connection', (socket) => {
         playerRooms.set(socket.id, roomCode);
         socket.join(roomCode);
 
+        // Notify all players (including the one joining) with current room state
         io.to(roomCode).emit('playerJoined', {
             playerName,
-            players: room.players
+            players: room.players,
+            subject: room.subject // Include current subject selection
         });
         console.log(`${playerName} joined room ${roomCode}`);
     });
 
     // Request new question
+    // Request new question - uses UNIFIED QUESTION GENERATION FUNCTION
     socket.on('requestQuestion', async ({ roomCode, conversationHistory }) => {
         const room = rooms.get(roomCode);
         if (!room || room.gameOver) return;
@@ -568,140 +695,37 @@ io.on('connection', (socket) => {
                 room.conversationHistory = conversationHistory;
             }
             
-            let attempts = 0;
-            let isDuplicate = true;
-            let aiResponse = '';
-            let isValidJSON = false;
-            let correctAnswerIndex = -1;
+            console.log(`[MULTIPLAYER] STEP 2-3: Requesting new question for room ${roomCode}`);
             
-            // Unlimited retries to get a unique, valid question with correct answer
-            while (isDuplicate || !isValidJSON || correctAnswerIndex === -1) {
-                attempts++;
-                
-                const baseMessage = `Generate a ${room.subject.toLowerCase()} multiple choice question with 4 options.
-
-CRITICAL: You MUST respond ONLY in XML format. Do NOT use JSON. Do NOT use any other format.
-
-Required XML structure:
-<question>
-    <text>Your question here</text>
-    <options>
-        <option>First option</option>
-        <option>Second option</option>
-        <option>Third option</option>
-        <option>Fourth option</option>
-    </options>
-</question>
-
-Generate the question now using ONLY the XML format above:`;
-                
-                // Build messages array with conversation history for context
-                const messages = [];
-                
-                // Add conversation history for context (last 5 Q&A pairs to avoid token limits)
-                if (room.conversationHistory.length > 0) {
-                    const recentHistory = room.conversationHistory.slice(-10); // Last 10 messages (5 Q&A pairs)
-                    messages.push(...recentHistory);
-                }
-                
-                // Add instruction to avoid duplicates or fix format if this is a retry
-                if (attempts > 1) {
-                    if (!isValidJSON) {
-                        messages.push({ 
-                            role: "system", 
-                            content: "The previous response was invalid. Generate VALID XML format with all tags properly closed."
-                        });
-                    } else {
-                        messages.push({ 
-                            role: "system", 
-                            content: `Generate a completely different ${room.subject.toLowerCase()} question than before. Stay within the ${room.subject} subject but use a different topic or concept.`
-                        });
-                    }
-                }
-                
-                // Add current question request
-                messages.push({ role: "user", content: baseMessage });
-
-                const chatCompletion = await client.chat.completions.create({
-                    model: AI_MODEL,
-                    messages: messages,
-                    max_tokens: 500,
-                    temperature: Math.min(1.2, 0.7 + (attempts * 0.15)), // Increase temperature more aggressively (same as singleplayer)
-                });
-
-                aiResponse = chatCompletion.choices[0].message.content;
-                console.log(`[Original AI Response - Multiplayer Q${attempts}]:`, aiResponse);
-                console.log('[Response Length]:', aiResponse.length);
-                
-                // Use shared parsing function that handles multiple JSON formats
-                const parsedData = parseQuizJSON(aiResponse);
-                
-                if (!parsedData) {
-                    isValidJSON = false;
-                    continue;
-                }
-                
-                // Valid JSON!
-                isValidJSON = true;
-                const newQuestion = parsedData.question.toLowerCase().trim();
-                
-                // Check if this question was asked before
-                let maxSimilarity = 0;
-                let mostSimilarQuestion = '';
-                
-                isDuplicate = room.askedQuestions.some(asked => {
-                    const similarity = calculateSimilarity(asked, newQuestion);
-                    if (similarity > maxSimilarity) {
-                        maxSimilarity = similarity;
-                        mostSimilarQuestion = asked;
-                    }
-                    return similarity > 0.5; // 50% similarity threshold (stricter)
-                });
-                
-                if (!isDuplicate) {
-                    // Question is unique, now verify it has a correct answer
-                    console.log(`✓ Attempt ${attempts}: Unique question (max similarity: ${(maxSimilarity * 100).toFixed(1)}%)`);
-                    console.log('[Multiplayer] Verifying correct answer with AI...');
-                    correctAnswerIndex = await findCorrectAnswerWithAI(parsedData.question, parsedData.options);
-                    
-                    if (correctAnswerIndex === -1) {
-                        console.log(`✗ Attempt ${attempts}: All options are wrong! The question doesn't match the options.`);
-                        console.log(`[Multiplayer] Regenerating with accuracy prompt (attempt ${attempts + 1})...`);
-                        // Mark as not valid so it regenerates
-                        isDuplicate = true; // Reset to trigger regeneration
-                    } else {
-                        // Store the question text and parsed data for later use
-                        room.askedQuestions.push(parsedData.question);
-                        room.parsedQuestionData = parsedData;
-                        console.log(`✓ Attempt ${attempts}: Valid question with correct answer: Option ${correctAnswerIndex + 1}`);
-                        console.log(`  Total questions in round: ${room.askedQuestions.length}`);
-                    }
-                } else {
-                    console.log(`✗ Attempt ${attempts}: Duplicate detected (${(maxSimilarity * 100).toFixed(1)}% similar)`);
-                    console.log(`  New: "${newQuestion.substring(0, 60)}..."`);
-                    console.log(`  Old: "${mostSimilarQuestion.substring(0, 60)}..."`);
-                }
+            // Use unified function to generate and validate question
+            const result = await generateAndValidateQuestion(
+                room.subject,
+                room.conversationHistory,
+                room.askedQuestions,
+                'multiplayer'
+            );
+            
+            if (!result.parsedData || result.correctAnswerIndex === -1) {
+                console.error('[MULTIPLAYER] Failed to generate valid question after multiple attempts');
+                socket.emit('error', { message: 'Failed to generate question' });
+                return;
             }
             
-            // Ensure we have a response
-            if (!aiResponse || aiResponse.trim().length === 0) {
-                console.error('ERROR: AI response is empty!');
-                aiResponse = JSON.stringify({
-                    question: "Error generating question. Please try again.",
-                    options: {A: "Try again", B: "Retry", C: "Refresh", D: "Continue"},
-                    answer: "A"
-                });
-            }
+            console.log(`[MULTIPLAYER] STEP 5: Valid question ready (after ${result.attempts} attempts)`);
             
-            room.currentQuestion = aiResponse;
+            // Store the parsed data for answer verification later
+            room.currentQuestion = result.aiResponse;
+            room.parsedQuestionData = result.parsedData;
+            room.correctAnswer = result.correctAnswerIndex;
             room.answers.clear();
             
-            console.log('Emitting question, length:', aiResponse?.length || 0);
-            io.to(roomCode).emit('newQuestion', { question: aiResponse });
+            // Emit question to all players
+            console.log('Emitting question to all players');
+            io.to(roomCode).emit('newQuestion', { question: result.aiResponse });
             
-            // Timer will start when client emits 'questionReady' after rendering buttons
+            // STEP 6: Timer will start when client emits 'questionReady' after rendering buttons
         } catch (error) {
-            console.error('Error generating question:', error);
+            console.error('[MULTIPLAYER] Error generating question:', error);
             socket.emit('error', { message: 'Failed to generate question' });
         }
     });
@@ -765,96 +789,38 @@ Generate the question now using ONLY the XML format above:`;
             return;
         }
 
-        // In compete mode, generate first question immediately
-        console.log('Compete mode: Generating first question automatically');
+        // In compete mode, generate first question immediately using UNIFIED FUNCTION
+        console.log('[MULTIPLAYER] STEP 1-3: Starting game and generating first question for compete mode');
         
-        // Generate first question with retry for valid JSON
         try {
-            let attempts = 0;
-            let isValidJSON = false;
-            let aiResponse = '';
-            let correctAnswerIndex = -1;
+            // Use unified function to generate and validate first question
+            const result = await generateAndValidateQuestion(
+                room.subject,
+                [], // No conversation history yet
+                room.askedQuestions,
+                'multiplayer'
+            );
             
-            // Unlimited retries until valid question with correct answer
-            while (!isValidJSON || correctAnswerIndex === -1) {
-                attempts++;
-                
-                const message = `Generate a ${room.subject.toLowerCase()} multiple choice question with 4 options.
-
-CRITICAL: You MUST respond ONLY in XML format. Do NOT use JSON. Do NOT use any other format.
-
-Required XML structure:
-<question>
-    <text>Your question here</text>
-    <options>
-        <option>First option</option>
-        <option>Second option</option>
-        <option>Third option</option>
-        <option>Fourth option</option>
-    </options>
-</question>
-
-Generate the question now using ONLY the XML format above:`;
-                
-                const messages = [{ role: "user", content: message }];
-                
-                // Add instruction to regenerate with different topic if this is a retry
-                if (attempts > 1) {
-                    messages.unshift({ 
-                        role: "system", 
-                        content: `The previous question was invalid. Generate a completely different ${room.subject.toLowerCase()} question. Stay within the ${room.subject} subject but use a different topic or concept.`
-                    });
-                }
-
-                const chatCompletion = await client.chat.completions.create({
-                    model: AI_MODEL,
-                    messages: messages,
-                    max_tokens: 500,
-                    temperature: Math.min(1.2, 0.7 + (attempts * 0.15)), // Same as other regeneration logic
-                });
-
-                aiResponse = chatCompletion.choices[0].message.content;
-                console.log(`[Original AI Response - First Question Attempt ${attempts}]:`, aiResponse);
-                console.log('[Response Length]:', aiResponse.length);
-                
-                // Use shared parsing function
-                const parsedData = parseQuizJSON(aiResponse);
-                
-                if (!parsedData) {
-                    console.log(`First question attempt ${attempts}: Failed to parse JSON`);
-                    continue;
-                }
-                
-                // Valid XML! Now verify it has a correct answer
-                isValidJSON = true;
-                console.log(`First question attempt ${attempts}: Valid XML parsed`);
-                console.log('[Compete Mode] Verifying correct answer with AI...');
-                correctAnswerIndex = await findCorrectAnswerWithAI(parsedData.question, parsedData.options);
-                
-                if (correctAnswerIndex === -1) {
-                    console.log(`✗ First question attempt ${attempts}: All options are wrong!`);
-                    console.log('[Compete Mode] Regenerating with accuracy prompt...');
-                    isValidJSON = false; // Reset to trigger regeneration
-                } else {
-                    room.currentQuestion = aiResponse;
-                    
-                    // Store first question in askedQuestions and parsed data for later use
-                    room.askedQuestions.push(parsedData.question);
-                    room.parsedQuestionData = parsedData;
-                    
-                    console.log(`✓ First question attempt ${attempts}: Valid question with correct answer: Option ${correctAnswerIndex + 1}`);
-                }
+            if (!result.parsedData || result.correctAnswerIndex === -1) {
+                console.error('[MULTIPLAYER] Failed to generate first question after multiple attempts');
+                socket.emit('error', { message: 'Failed to generate first question' });
+                return;
             }
             
+            console.log(`[MULTIPLAYER] STEP 5: First question ready (after ${result.attempts} attempts)`);
+            
+            // Store question data in room
+            room.currentQuestion = result.aiResponse;
+            room.parsedQuestionData = result.parsedData;
+            room.correctAnswer = result.correctAnswerIndex;
             room.answers.clear();
             
             // Emit the first question to all players
             io.to(roomCode).emit('newQuestion', { question: room.currentQuestion });
             
-            // Timer will start when client emits 'questionReady' after rendering buttons
-
+            // STEP 6: Timer will start when client emits 'questionReady' after rendering buttons
         } catch (error) {
-            console.error('Error generating question:', error);
+            console.error('[MULTIPLAYER] Error generating first question:', error);
             socket.emit('error', { message: 'Failed to generate question' });
         }
     });
@@ -874,14 +840,17 @@ Generate the question now using ONLY the XML format above:`;
         room.answerTimer = setTimeout(async () => {
             console.log('[Timer] Time expired! Checking answers with AI...');
             
+            // Signal all clients to stop visual timer
+            io.to(roomCode).emit('stopTimer');
+            
             // Only process if not all players have answered (which would have been handled already)
             if (room.answers.size < room.players.length) {
                 // Show AI checking overlay to all players
                 io.to(roomCode).emit('aiCheckingStart');
                 
-                // Verify correct answer with AI when time runs out
+                // Use AI-verified answer from question generation (no additional AI call needed)
                 if (room.parsedQuestionData) {
-                    room.correctAnswer = await findCorrectAnswerWithAI(room.parsedQuestionData.question, room.parsedQuestionData.options);
+                    room.correctAnswer = room.parsedQuestionData.answer;
                     // If all options are wrong, default to first option
                     if (room.correctAnswer === -1) {
                         console.log('[Timer] Warning: All options are wrong, defaulting to option 0');
@@ -979,15 +948,10 @@ Generate the question now using ONLY the XML format above:`;
             // Show AI checking overlay to all players
             io.to(roomCode).emit('aiCheckingStart');
             
-            // Do AI verification now that all players answered
-            console.log('[AI Verification] Starting answer verification...');
+            // Use AI-verified answer from question generation (no additional AI call needed)
+            console.log('[AI Verification] Using pre-verified answer from question generation...');
             if (room.parsedQuestionData) {
-                room.correctAnswer = await findCorrectAnswerWithAI(room.parsedQuestionData.question, room.parsedQuestionData.options);
-                // If all options are wrong, default to first option
-                if (room.correctAnswer === -1) {
-                    console.log('[Collab] Warning: All options are wrong, defaulting to option 0');
-                    room.correctAnswer = 0;
-                }
+                room.correctAnswer = room.parsedQuestionData.answer;
             }
             
             // Calculate isCorrect for each answer and update scores
@@ -1041,13 +1005,16 @@ Generate the question now using ONLY the XML format above:`;
                 room.answerTimer = null;
             }
             
+            // Signal all clients to stop visual timer
+            io.to(roomCode).emit('stopTimer');
+            
             // Show AI checking overlay to all players
             io.to(roomCode).emit('aiCheckingStart');
             
-            // Do AI verification now that all players answered
-            console.log('[AI Verification] Starting answer verification...');
+            // Use AI-verified answer from question generation (no additional AI call needed)
+            console.log('[AI Verification] Using pre-verified answer from question generation...');
             if (room.parsedQuestionData) {
-                room.correctAnswer = await findCorrectAnswerWithAI(room.parsedQuestionData.question, room.parsedQuestionData.options);
+                room.correctAnswer = room.parsedQuestionData.answer;
                 // If all options are wrong, default to first option
                 if (room.correctAnswer === -1) {
                     console.log('[Compete] Warning: All options are wrong, defaulting to option 0');

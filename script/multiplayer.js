@@ -1,3 +1,17 @@
+// ============================================================================
+// UNIFIED GAME SEQUENCE (MULTIPLAYER):
+// Client-side implementation using WebSocket
+//
+// STEP 1: Game starts (user clicks start game)
+// STEP 2: Server generates question with 4 options
+// STEP 3: Server verifies the answer - if no correct answer, regenerates
+// STEP 4: Server sends question to all players via 'newQuestion' event
+// STEP 5: Clients render UI, players see timer (30 seconds)
+// STEP 6: Player(s) select answer or timer expires
+// STEP 7: Server verifies answer with AI and calculates scores
+// STEP 8: Server broadcasts results via 'revealAnswers' event
+// ============================================================================
+
 // Multiplayer state
 let socket = null;
 let currentRoomCode = '';
@@ -99,9 +113,23 @@ function connectSocket() {
         showWaitingRoom(roomCode);
     });
     
-    socket.on('playerJoined', ({ playerName: pName, players }) => {
+    socket.on('playerJoined', ({ playerName: pName, players, subject }) => {
         updatePlayersList(players);
         addSystemMessage(`${pName} joined the room`);
+        
+        // Sync the subject selection from the room (when a new player joins)
+        if (subject) {
+            window.setCurrentSubject(subject);
+            
+            // Update UI to show selected state using data attribute
+            const subjectCards = document.querySelectorAll('.waiting-room-page .subject-card');
+            subjectCards.forEach(card => {
+                card.classList.remove('selected');
+                if (card.getAttribute('data-subject-id') === subject) {
+                    card.classList.add('selected');
+                }
+            });
+        }
     });
     
     socket.on('playerLeft', ({ players }) => {
@@ -112,17 +140,17 @@ function connectSocket() {
     socket.on('subjectChanged', ({ subject, playerName: pName }) => {
         window.setCurrentSubject(subject);
         
-        // Update UI to show selected state
+        // Update UI to show selected state using data attribute
         const subjectCards = document.querySelectorAll('.waiting-room-page .subject-card');
         subjectCards.forEach(card => {
             card.classList.remove('selected');
-            if (card.textContent.includes(subject)) {
+            if (card.getAttribute('data-subject-id') === subject) {
                 card.classList.add('selected');
             }
         });
         
         // Show notification
-        addSystemMessage(`${pName} selected ${subject}`);
+        addSystemMessage(`${pName} selected a subject`);
     });
     
     socket.on('gameStarted', ({ subject, mode, startedBy }) => {
@@ -186,6 +214,12 @@ function connectSocket() {
     
     socket.on('answerSubmitted', ({ playerName: pName, selectedOption, totalAnswers, totalPlayers }) => {
         addSystemMessage(`${pName} answered (${totalAnswers}/${totalPlayers})`);
+    });
+    
+    // Stop visual timer when all players have answered or time expires
+    socket.on('stopTimer', () => {
+        console.log('[Timer] Server signaling to stop visual timer');
+        stopTimer();
     });
     
     // AI checking overlay handlers
@@ -645,6 +679,7 @@ function showWaitingRoom(roomCode) {
         window.SUBJECTS.forEach(subj => {
         const btn = document.createElement('button');
         btn.className = 'subject-card';
+        btn.setAttribute('data-subject-id', subj.id);
         btn.onclick = () => {
             if (window.selectRoomSubject) window.selectRoomSubject(subj.id);
         };
@@ -668,11 +703,11 @@ function updatePlayersList(players) {
 function selectRoomSubject(subject) {
     window.setCurrentSubject(subject);
     
-    // Update UI to show selected state
+    // Update UI to show selected state using data attribute
     const subjectCards = document.querySelectorAll('.waiting-room-page .subject-card');
     subjectCards.forEach(card => {
         card.classList.remove('selected');
-        if (card.textContent.includes(subject)) {
+        if (card.getAttribute('data-subject-id') === subject) {
             card.classList.add('selected');
         }
     });
@@ -681,7 +716,7 @@ function selectRoomSubject(subject) {
     if (socket && currentRoomCode) {
         socket.emit('setSubject', { roomCode: currentRoomCode, subject: subject });
     }
-}
+}}
 
 function startMultiplayerGame() {
     console.log('startMultiplayerGame called');
@@ -780,11 +815,8 @@ function requestMultiplayerQuestion() {
 function submitMultiplayerAnswer(selectedIndex) {
     console.log('submitMultiplayerAnswer called:', { selectedIndex, hasSocket: !!socket, roomCode: currentRoomCode });
     
-    // In compete mode, stop timer for this player after they submit
-    // (timer still runs on server until all players answer)
-    if (multiplayerType === 'compete') {
-        stopTimer();
-    }
+    // In compete mode, keep visual timer running for all players
+    // The server will emit 'stopTimer' when all players have answered or time expires
     
     if (socket && currentRoomCode) {
         console.log('Emitting submitAnswer to server');
