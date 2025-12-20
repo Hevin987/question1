@@ -432,19 +432,19 @@ window.closeModal = closeModal;
 // Navigation functions
 // Subject data array (name, image, id)
 window.SUBJECTS = [
-    { name: 'History', image: 'image/hist.png', id: 'History' },
-    { name: 'Chinese History', image: 'image/chist.png', id: '中文的中國歷史' },
-    { name: 'Cantonese', image: 'image/canton.webp', id: '粵語' },
-    { name: 'Science', image: 'image/science.png', id: 'Science' },
-    { name: 'Physics', image: 'image/phy.png', id: 'Physics' },
-    { name: 'Math', image: 'image/math.png', id: 'Math' },
-    { name: 'Geography', image: 'image/geo.png', id: 'Geography' },
-    { name: 'War', image: 'image/war.png', id: 'War' },
-    { name: 'Music', image: 'image/music.png', id: 'Music Theory' },
-    { name: 'Music Technology', image: 'image/musictech.png', id: 'Music Technology' },
-    { name: 'EDM', image: 'image/edm.png', id: 'electonic dance music' },
-    { name: 'World Trigger', image: 'image/worldTrigger.png', id: 'World Trigger TV Series' },
-    { name: 'Minecraft', image: 'image/minecraft.png', id: 'Minecraft' }
+    { name: 'History', zh_name: '歷史', image: 'image/hist.png', id: 'History' },
+    { name: 'Chinese History', zh_name: '中國歷史', image: 'image/chist.png', id: '中文的中國歷史' },
+    { name: 'Cantonese', zh_name: '粵語', image: 'image/canton.webp', id: '粵語' },
+    { name: 'Science', zh_name: '科學', image: 'image/science.png', id: 'Science' },
+    { name: 'Physics', zh_name: '物理學', image: 'image/phy.png', id: 'Physics' },
+    { name: 'Math', zh_name: '數學', image: 'image/math.png', id: 'Math' },
+    { name: 'Geography', zh_name: '地理', image: 'image/geo.png', id: 'Geography' },
+    { name: 'War', zh_name: '戰爭', image: 'image/war.png', id: 'War' },
+    { name: 'Music', zh_name: '音樂', image: 'image/music.png', id: 'Music Theory' },
+    { name: 'Music Technology', zh_name: '音樂科技', image: 'image/musictech.png', id: 'Music Technology' },
+    { name: 'EDM', zh_name: '電子舞曲', image: 'image/edm.png', id: 'electonic dance music' },
+    { name: 'World Trigger', zh_name: '境界触发者', image: 'image/worldTrigger.png', id: 'World Trigger TV Series' },
+    { name: 'Minecraft', zh_name: '我的世界', image: 'image/minecraft.png', id: 'Minecraft' }
 
     // Add more subjects here if needed
 ];
@@ -463,6 +463,7 @@ function renderSubjectGrid(mode) {
     // For multiplayer: only show first 4 subjects in 2x2 grid
     const subjectsToShow = mode === 'singleplayer' ? SUBJECTS : SUBJECTS.slice(0, 4);
     
+    if(document.documentElement.lang === !"ZH"){
     subjectsToShow.forEach(subj => {
         const btn = document.createElement('button');
         btn.className = 'subject-card';
@@ -478,7 +479,24 @@ function renderSubjectGrid(mode) {
             <div class="subject-name">${subj.name}</div>
         `;
         grid.appendChild(btn);
-    });
+    });}
+    else{
+    subjectsToShow.forEach(subj => {
+        const btn = document.createElement('button');
+        btn.className = 'subject-card';
+        btn.onclick = () => {
+            if (mode === 'singleplayer') {
+                startChat(subj.id, subj.zh_name);
+            } else {
+                if (window.selectRoomSubject) window.selectRoomSubject(subj.id);
+            }
+        };
+        btn.innerHTML = `
+            <div class="subject-icon"><img class="subject-icon" src="${subj.image}" alt="${subj.zg_name}"></div>
+            <div class="subject-name">${subj.zh_name}</div>
+        `;
+        grid.appendChild(btn);
+    });}
 }
 
 // Render subject grids on page show
@@ -523,7 +541,10 @@ function goToModeSelection(mode) {
     } else {
         // Show subject selection for singleplayer
         document.getElementById('subjectPage').style.display = 'flex';
+        if(document.documentElement.lang === !"ZH")
         document.getElementById('modeSubtitle').textContent = 'Select a subject for singleplayer mode';
+        else
+        document.getElementById('modeSubtitle').textContent = '選擇單人模式的主題';
     }
 }
 
@@ -578,8 +599,12 @@ function startChat(subject, subjectTitle) {
         document.getElementById('roomSetupPage').style.display = 'flex';
         
         const multiplayerType = window.getMultiplayerType();
-        const modeText = multiplayerType === 'collab' ? 'Collab' : 'Compete';
-        document.getElementById('roomModeSubtitle').textContent = `${subject} - ${modeText} Mode`;
+        if (!document.documentElement.lang === "ZH"){
+            const modeText = multiplayerType === 'collab' ? 'Collab' : 'Compete';
+            document.getElementById('roomModeSubtitle').textContent = `${subject} - ${modeText} Mode`;}
+        else{
+            const modeText = multiplayerType === 'collab' ? '合作' : '競爭';
+            document.getElementById('roomModeSubtitle').textContent = `${subjectTitle} - ${modeText} 模式`;}
         return;
     }
     
@@ -1296,7 +1321,10 @@ async function handleAnswerSelection(selectedRow, selectedIndex, correctAnswer, 
         
         const continueBtn = document.createElement('button');
         continueBtn.className = 'quiz-action-btn continue-btn';
-        continueBtn.textContent = 'Continue';
+        if (!document.documentElement.lang === "ZH")
+            continueBtn.textContent = 'Continue';
+        else
+            continueBtn.textContent = '繼續';
         continueBtn.addEventListener('click', () => {
             // Play next question sound
             if (window.playNextQuestionSound) {

@@ -1,0 +1,284 @@
+<!DOCTYPE html>
+<html lang="ZH">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <!-- Preload fonts for better performance -->
+    <link rel="preload" href="font/Consola.ttf" as="font" type="font/truetype" crossorigin>
+    <link rel="preload" href="font/Consolab.ttf" as="font" type="font/truetype" crossorigin>
+    <link rel="preload" href="font/HurmitNerdFontMono-Bold.otf" as="font" type="font/opentype" crossorigin>
+    <link rel="stylesheet" href="styles.css">
+    <title>類似 Quiz Planet 的 Quest 遊戲</title>
+</head>
+<body>
+    <!-- Audio elements with autoplay -->
+    <audio id="mainBGMIntro" src="audio/mainbgm.ogg" preload="auto"></audio>
+    <audio id="mainBGMLoop" src="audio/mainbgmloop.ogg" preload="auto" loop></audio>
+    <!-- Page 1: Landing Page -->
+    <div class="landing-page" id="landingPage">
+        <div class="landing-content">
+            <div class="landing-icon">
+                <svg width="80" height="80" viewBox="0 0 80 80" fill="none">
+                    <circle cx="40" cy="40" r="38" stroke="#0a84ff" stroke-width="4"/>
+                    <path d="M25 40 L35 50 L55 30" stroke="#0a84ff" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/>
+                </svg>
+            </div>
+            <h1 class="landing-title">不是 Quiz Planet</h1>
+            <p class="landing-subtitle">這不是quiz planet</p>
+            
+            <div class="button-container">
+                <button class="mode-button" onclick="goToModeSelection('singleplayer')">
+                    <div class="button-icon">👤</div>
+                    <div class="button-text">
+                        <div class="button-title">單人遊戲模式</div>
+                        <div class="button-desc">單獨遊玩</div>
+                    </div>
+                </button>
+                
+                <button class="mode-button" onclick="goToModeSelection('multiplayer')">
+                    <div class="button-icon">👥</div>
+                    <div class="button-text">
+                        <div class="button-title">多人遊戲模式</div>
+                        <div class="button-desc">與其他人一起遊玩</div>
+                    </div>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Page 2: Subject Selection -->
+    <div class="subject-page" id="subjectPage" style="display: none;">
+        <div class="subject-content">
+            <button class="back-button-top" onclick="goBackToLanding()">
+                <svg width="20" height="20" viewBox="0 0 20 20" fill="white">
+                    <path d="M12 16L6 10L12 4" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                </svg>
+            </button>
+            <h2 class="subject-title">選擇一個主題</h2>
+            <p class="subject-subtitle" id="modeSubtitle">選擇一個主題開始遊戲</p>
+            <div class="subject-scroll-panel">
+                <div id="subjectGridSingle" class="subject-grid"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Page 2.5: Multiplayer Mode Selection -->
+    <div class="multiplayer-page" id="multiplayerPage" style="display: none;">
+        <div class="multiplayer-content">
+            <button class="back-button-top" onclick="goBackToLanding()">
+                <svg width="20" height="20" viewBox="0 0 20 20" fill="white">
+                    <path d="M12 16L6 10L12 4" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                </svg>
+            </button>
+            
+            <h2 class="multiplayer-title">多人遊戲模式</h2>
+            <p class="multiplayer-subtitle">選擇遊戲方式</p>
+            
+            <div class="button-container">
+                <button class="mode-button" onclick="goToRoomSetup('collab')">
+                    <div class="button-icon">🤝</div>
+                    <div class="button-text">
+                        <div class="button-title">協作模式</div>
+                        <div class="button-desc">與朋友一起合作以獲勝</div>
+                    </div>
+                </button>
+                
+                <button class="mode-button" onclick="goToRoomSetup('compete')">
+                    <div class="button-icon">⚔️</div>
+                    <div class="button-text">
+                        <div class="button-title">競爭模式</div>
+                        <div class="button-desc">挑戰他人以獲勝</div>
+                    </div>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Page 2.6: Multiplayer Room Setup -->
+    <div class="room-setup-page" id="roomSetupPage" style="display: none;">
+        <div class="room-setup-content">
+            <button class="back-button-top" onclick="goBackToMultiplayerMode()">
+                <svg width="20" height="20" viewBox="0 0 20 20" fill="white">
+                    <path d="M12 16L6 10L12 4" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                </svg>
+            </button>
+
+            <h2 class="room-title">房間設置</h2>
+            <p class="room-subtitle" id="roomModeSubtitle">創建或加入房間</p>
+
+            <div class="room-form">
+                <input type="text" id="playerNameInput" placeholder="你的名字" maxlength="20" />
+                
+                <div class="button-container">
+                    <button class="mode-button" onclick="createRoom()">
+                        <div class="button-icon">➕</div>
+                        <div class="button-text">
+                            <div class="button-title">創建房間</div>
+                            <div class="button-desc">開始新遊戲</div>
+                        </div>
+                    </button>
+                    
+                    <div class="join-room-section">
+                        <input type="text" id="roomCodeInput" placeholder="房間代碼" maxlength="6" style="text-transform: uppercase;" />
+                        <button class="mode-button" onclick="joinRoom()">
+                            <div class="button-icon">🚪</div>
+                            <div class="button-text">
+                                <div class="button-title">加入房間</div>
+                                <div class="button-desc">輸入朋友的遊戲</div>
+                            </div>
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Page 2.7: Multiplayer Waiting Room -->
+    <div class="waiting-room-page" id="waitingRoomPage" style="display: none;">
+        <button class="back-button-top" onclick="goBackToMultiplayerMode()">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2">
+                <path d="M19 12H5M12 19l-7-7 7-7"/>
+            </svg>
+        </button>
+        <div class="waiting-content">
+            <h2 class="waiting-title">選擇主題</h2>
+            <div class="room-code-display">
+                <p>房間代碼:</p>
+                <h1 id="displayRoomCode">------</h1>
+                <p class="room-hint">與朋友分享此代碼</p>
+            </div>
+            
+            <div class="subject-scroll-panel">
+                <div id="subjectGridMulti" class="subject-grid"></div>
+            </div>
+            
+            <div class="players-list" id="playersList">
+                <h3>Players:</h3>
+                <div id="playersContainer"></div>
+            </div>
+
+            <button class="start-game-btn" onclick="startMultiplayerGame()">開始遊戲</button>
+        </div>
+    </div>
+
+    <!-- Score Screen -->
+    <div class="score-screen" id="scoreScreen" style="display: none;">
+        <div class="score-content">
+            <h2 class="score-title">回合完成！</h2>
+            <div id="scoreboardContainer" class="scoreboard-container"></div>
+            <button class="continue-score-btn" onclick="continueFromScore()">繼續</button>
+        </div>
+    </div>
+
+    <!-- Level Progress Screen -->
+    <div class="level-progress-page" id="levelProgressPage" style="display: none;">
+        <div class="level-progress-content">
+            <h2 class="level-title">關卡進度</h2>
+            <p class="level-subtitle" id="levelRoomCode">房間: ------</p>
+            
+            <div class="level-container">
+                <div class="level-scores">
+                    <div class="level-row" data-level="0">
+                        <div class="level-item">100</div>
+                        <div class="level-indicator yellow"></div>
+                    </div>
+                    <div class="level-row" data-level="1">
+                        <div class="level-item">1,000</div>
+                        <div class="level-indicator yellow"></div>
+                    </div>
+                    <div class="level-row" data-level="2">
+                        <div class="level-item">2,000</div>
+                        <div class="level-indicator yellow"></div>
+                    </div>
+                    <div class="level-row" data-level="3">
+                        <div class="level-item">4,000</div>
+                        <div class="level-indicator yellow"></div>
+                    </div>
+                    <div class="level-row" data-level="4">
+                        <div class="level-item">8,000</div>
+                        <div class="level-indicator yellow"></div>
+                    </div>
+                    <div class="level-row" data-level="5">
+                        <div class="level-item">16,000</div>
+                        <div class="level-indicator green"></div>
+                    </div>
+                    <div class="level-row" data-level="6">
+                        <div class="level-item">32,000</div>
+                        <div class="level-indicator green"></div>
+                    </div>
+                    <div class="level-row" data-level="7">
+                        <div class="level-item">64,000</div>
+                        <div class="level-indicator green"></div>
+                    </div>
+                    <div class="level-row" data-level="8">
+                        <div class="level-item">125,000</div>
+                        <div class="level-indicator green"></div>
+                    </div>
+                    <div class="level-row" data-level="9">
+                        <div class="level-item">250,000</div>
+                        <div class="level-indicator green"></div>
+                    </div>
+                    <div class="level-row" data-level="10">
+                        <div class="level-item">500,000</div>
+                        <div class="level-indicator green"></div>
+                    </div>
+                    <div class="level-row" data-level="11">
+                        <div class="level-item">1,000,000</div>
+                        <div class="level-indicator green"></div>
+                    </div>
+                </div>
+            </div>
+            
+                <button class="level-continue-btn" onclick="continueLevelScreen()">繼續</button>
+            </div>
+    </div>
+
+    <!-- Page 3: Chat Page -->
+    <div class="chat-container" id="chatContainer" style="display: none;">
+        <div class="chat-header">
+            <div>
+                <h1 id="chatTitle">AI Chat Assistant</h1>
+                <p id="chatSubtitle">Powered by Llama 3.2 (Free)</p>
+            </div>
+        </div>
+        <div class="timer-container" id="timerContainer" style="display: none;">
+            <div class="timer-label">Time Remaining: <span id="timerText">30s</span></div>
+            <div class="timer-bar">
+                <div class="timer-fill" id="timerFill"></div>
+            </div>
+        </div>
+        <div class="chat-messages" id="chatMessages">
+            <div class="message ai-message">
+                <div class="message-content">
+                    Hello! I'm your AI assistant. How can I help you today?
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- AI Checking Overlay -->
+    <div class="ai-checking-overlay" id="aiCheckingOverlay">
+        <div class="ai-checking-text">AI正在檢查，請稍候。</div>
+        <div class="whistler-loader">
+            <div class="whistler-bar"></div>
+            <div class="whistler-bar"></div>
+            <div class="whistler-bar"></div>
+            <div class="whistler-bar"></div>
+        </div>
+    </div>
+
+    <!-- Modern Alert Modal -->
+    <div class="modal-overlay" id="modalOverlay" style="display: none;">
+        <div class="modal-content">
+            <div class="modal-icon"><img class="alert" src="image/stop.webp" alt="Alert Icon"></div>
+            <div class="modal-message" id="modalMessage"></div>
+            <button class="modal-button" onclick="closeModal()">OK</button>
+        </div>
+    </div>
+
+    <script src="script/main.js"></script>
+    <script src="script/multiplayer.js"></script>
+</body>
+</html>
