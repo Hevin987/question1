@@ -463,7 +463,7 @@ function renderSubjectGrid(mode) {
     // For multiplayer: only show first 4 subjects in 2x2 grid
     const subjectsToShow = mode === 'singleplayer' ? SUBJECTS : SUBJECTS.slice(0, 4);
     
-    if(document.documentElement.lang === !"ZH"){
+    if(document.documentElement.lang === "en"){
     subjectsToShow.forEach(subj => {
         const btn = document.createElement('button');
         btn.className = 'subject-card';
@@ -541,7 +541,7 @@ function goToModeSelection(mode) {
     } else {
         // Show subject selection for singleplayer
         document.getElementById('subjectPage').style.display = 'flex';
-        if(document.documentElement.lang === !"ZH")
+        if(document.documentElement.lang === "en")
         document.getElementById('modeSubtitle').textContent = 'Select a subject for singleplayer mode';
         else
         document.getElementById('modeSubtitle').textContent = '選擇單人模式的主題';
@@ -599,7 +599,7 @@ function startChat(subject, subjectTitle) {
         document.getElementById('roomSetupPage').style.display = 'flex';
         
         const multiplayerType = window.getMultiplayerType();
-        if (!document.documentElement.lang === "ZH"){
+        if (!document.documentElement.lang === "zh"){
             const modeText = multiplayerType === 'collab' ? 'Collab' : 'Compete';
             document.getElementById('roomModeSubtitle').textContent = `${subject} - ${modeText} Mode`;}
         else{
@@ -613,9 +613,15 @@ function startChat(subject, subjectTitle) {
     document.getElementById('chatContainer').style.display = 'flex';
     
     // Update chat header
-    const modeText = 'Singleplayer';
-    document.getElementById('chatTitle').textContent = `${CurrentSubjectTitle} - ${modeText} Mode`;
-    document.getElementById('chatSubtitle').textContent = 'Is it AI or not';
+    if(document.documentElement.lang === "en"){
+        const modeText = 'Singleplayer';
+        document.getElementById('chatTitle').textContent = `${CurrentSubjectTitle} - ${modeText} Mode`;
+        document.getElementById('chatSubtitle').textContent = 'Is it AI or not';}
+    else{
+        const modeText = '單人模式';
+        document.getElementById('chatTitle').textContent = `${CurrentSubjectTitle}-${modeText}`;
+        document.getElementById('chatSubtitle').textContent = '是AI還是不是AI';
+    }
     
     // Clear chat
     if (!chatMessages) chatMessages = document.getElementById('chatMessages');
@@ -1316,12 +1322,16 @@ async function handleAnswerSelection(selectedRow, selectedIndex, correctAnswer, 
         
         const backBtn = document.createElement('button');
         backBtn.className = 'quiz-action-btn back-btn';
-        backBtn.textContent = 'Back';
+        if (document.documentElement.lang === "en")
+            backBtn.textContent = 'Back';
+        else
+            backBtn.textContent = '返回';
+
         backBtn.addEventListener('click', goBackToSubjects);
         
         const continueBtn = document.createElement('button');
         continueBtn.className = 'quiz-action-btn continue-btn';
-        if (!document.documentElement.lang === "ZH")
+        if (!document.documentElement.lang === "zh")
             continueBtn.textContent = 'Continue';
         else
             continueBtn.textContent = '繼續';

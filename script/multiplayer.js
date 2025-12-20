@@ -24,6 +24,7 @@ let currentLevel = 0; // Track current question level (0-11)
 let levelStatus = []; // Track status of each level: 'unanswered', 'correct', 'incorrect'
 let conversationHistory = []; // Track Q&A history for AI context
 let currentLoadingMessage = null; // Track current loading message element
+let currentMultiplayerSubjectTitle = ''; // Track current subject title for display in multiplayer
 
 // Initialize Socket.IO
 function initializeSocket() {
@@ -50,7 +51,7 @@ function initializeSocket() {
         };
         script.onerror = () => {
             console.error('Failed to load Socket.IO');
-            if (!document.documentElement.lang === "ZH")
+            if (!document.documentElement.lang === "zh")
                 showModal('Failed to load multiplayer features. Please make sure the server is running.');
             else
                 showModal('無法加載多人遊戲功能。請確保伺服器正在運行。');
@@ -84,7 +85,7 @@ function connectSocket() {
                     row.style.backgroundColor = '#2c2c2e';
                 }
             });
-            if (!document.documentElement.lang === "ZH")
+            if (!document.documentElement.lang === "zh")
                 addSystemMessage(`❌ You selected a wrong answer! Game Over in Collab Mode.`);
             else
                 addSystemMessage(`❌ 你選錯了答案！協作模式遊戲結束。`);
@@ -95,7 +96,7 @@ function connectSocket() {
                 actionsDiv.className = 'quiz-actions';
                 const continueBtn = document.createElement('button');
                 continueBtn.className = 'quiz-action-btn continue-btn';
-                    if (!document.documentElement.lang === "ZH")
+                    if (!document.documentElement.lang === "zh")
                         continueBtn.textContent = 'Continue';
                     else
                         continueBtn.textContent = '繼續';
@@ -122,9 +123,9 @@ function connectSocket() {
         showWaitingRoom(roomCode);
     });
     
-    socket.on('playerJoined', ({ playerName: pName, players, subject }) => {
+    socket.on('playerJoined', ({ playerName: pName, players, subject, subjectTitle }) => {
         updatePlayersList(players);
-        if (!document.documentElement.lang === "ZH")
+        if (!document.documentElement.lang === "zh")
             addSystemMessage(`${pName} joined the room`);
         else
             addSystemMessage(`${pName} 加入了房間`);
@@ -132,6 +133,17 @@ function connectSocket() {
         // Sync the subject selection from the room (when a new player joins)
         if (subject) {
             window.setCurrentSubject(subject);
+            if (subjectTitle) {
+                currentMultiplayerSubjectTitle = subjectTitle;
+            } else {
+                // Fallback: find subject title from SUBJECTS array
+                const subjectObj = window.SUBJECTS && window.SUBJECTS.find(s => s.id === subject);
+                if (subjectObj) {
+                    currentMultiplayerSubjectTitle = document.documentElement.lang === "zh" ? subjectObj.zh_name : subjectObj.name;
+                } else {
+                    currentMultiplayerSubjectTitle = subject;
+                }
+            }
             
             // Update UI to show selected state using data attribute
             const subjectCards = document.querySelectorAll('.waiting-room-page .subject-card');
@@ -146,14 +158,25 @@ function connectSocket() {
     
     socket.on('playerLeft', ({ players }) => {
         updatePlayersList(players);
-        if (!document.documentElement.lang === "ZH")
+        if (!document.documentElement.lang === "zh")
             addSystemMessage('A player left the room');
         else
             addSystemMessage('有玩家離開了房間');
     });
     
-    socket.on('subjectChanged', ({ subject, playerName: pName }) => {
+    socket.on('subjectChanged', ({ subject, subjectTitle, playerName: pName }) => {
         window.setCurrentSubject(subject);
+        if (subjectTitle) {
+            currentMultiplayerSubjectTitle = subjectTitle;
+        } else {
+            // Fallback: find subject title from SUBJECTS array
+            const subjectObj = window.SUBJECTS && window.SUBJECTS.find(s => s.id === subject);
+            if (subjectObj) {
+                currentMultiplayerSubjectTitle = document.documentElement.lang === "zh" ? subjectObj.zh_name : subjectObj.name;
+            } else {
+                currentMultiplayerSubjectTitle = subject;
+            }
+        }
         
         // Update UI to show selected state using data attribute
         const subjectCards = document.querySelectorAll('.waiting-room-page .subject-card');
@@ -165,16 +188,27 @@ function connectSocket() {
         });
         
         // Show notification
-        if (!document.documentElement.lang === "ZH")
+        if (!document.documentElement.lang === "zh")
             addSystemMessage(`${pName} selected a subject`);
         else
             addSystemMessage(`${pName} 選擇了一個主題`);
     });
     
-    socket.on('gameStarted', ({ subject, mode, startedBy }) => {
-        console.log('Game started event received:', { subject, mode, startedBy });
+    socket.on('gameStarted', ({ subject, subjectTitle, mode, startedBy }) => {
+        console.log('Game started event received:', { subject, subjectTitle, mode, startedBy });
         isMultiplayerActive = true;
         window.setCurrentSubject(subject);
+        if (subjectTitle) {
+            currentMultiplayerSubjectTitle = subjectTitle;
+        } else {
+            // Fallback: find subject title from SUBJECTS array
+            const subjectObj = window.SUBJECTS && window.SUBJECTS.find(s => s.id === subject);
+            if (subjectObj) {
+                currentMultiplayerSubjectTitle = document.documentElement.lang === "zh" ? subjectObj.zh_name : subjectObj.name;
+            } else {
+                currentMultiplayerSubjectTitle = subject;
+            }
+        }
         
         // Stop background music when game starts
         if (window.stopMainBGM) {
@@ -187,14 +221,14 @@ function connectSocket() {
         conversationHistory = []; // Clear conversation history for new game
         
         document.getElementById('waitingRoomPage').style.display = 'none';
-        if (!document.documentElement.lang === "ZH"){
+        if (!document.documentElement.lang === "zh"){
             const modeText = mode === 'collab' ? 'Collab' : 'Compete';
-            document.getElementById('chatTitle').textContent = `${subject} - ${modeText} Mode`;
+            document.getElementById('chatTitle').textContent = `${currentMultiplayerSubjectTitle} - ${modeText} Mode`;
             document.getElementById('chatSubtitle').textContent = `Room: ${currentRoomCode}`;
         }
         else{
             const modeText = mode === 'collab' ? '協作' : '競爭';
-            document.getElementById('chatTitle').textContent = `${subject} - ${modeText}模式`;
+            document.getElementById('chatTitle').textContent = `${currentMultiplayerSubjectTitle}-${modeText}模式`;
             document.getElementById('chatSubtitle').textContent = `房間: ${currentRoomCode}`;
         }
         
@@ -206,7 +240,7 @@ function connectSocket() {
             document.getElementById('chatContainer').style.display = 'flex';
             const chatMessages = document.getElementById('chatMessages');
             chatMessages.innerHTML = '';
-            if (!document.documentElement.lang === "ZH")
+            if (!document.documentElement.lang === "zh")
                 addSystemMessage(`Game started. 🤖 Cooking up a spicy question...`);
             else
                 addSystemMessage(`遊戲開始。🤖 正在準備一個刺激的問題...`);
@@ -240,7 +274,7 @@ function connectSocket() {
     };
     
     socket.on('answerSubmitted', ({ playerName: pName, selectedOption, totalAnswers, totalPlayers }) => {
-        if (!document.documentElement.lang === "ZH")
+        if (!document.documentElement.lang === "zh")
             addSystemMessage(`${pName} answered (${totalAnswers}/${totalPlayers})`);
         else
             addSystemMessage(`${pName} 答了 (${totalAnswers}/${totalPlayers})`);
@@ -277,7 +311,7 @@ function connectSocket() {
                     row.style.backgroundColor = '#2c2c2e';
                 }
             });
-            if (!document.documentElement.lang === "ZH")
+            if (!document.documentElement.lang === "zh")
                 addSystemMessage(`${pName} selected an answer`);
             else
                 addSystemMessage(`${pName} 選擇了一個答案`);
@@ -365,13 +399,13 @@ function connectSocket() {
             let wrongPlayers = playerAnswers.filter(p => !p.isCorrect).map(p => p.playerName);
             
             if (correctPlayers.length > 0) {
-                if (!document.documentElement.lang === "ZH")
+                if (!document.documentElement.lang === "zh")
                     addSystemMessage(`✓ Correct: ${correctPlayers.join(', ')}`);
                 else
                     addSystemMessage(`✓ 答對: ${correctPlayers.join(', ')}`);
             }
             if (wrongPlayers.length > 0) {
-                if (!document.documentElement.lang === "ZH")
+                if (!document.documentElement.lang === "zh")
                     addSystemMessage(`✗ Wrong: ${wrongPlayers.join(', ')}`);
                 else 
                     addSystemMessage(`✗ 答錯: ${wrongPlayers.join(', ')}`);
@@ -379,7 +413,7 @@ function connectSocket() {
             
             // In collab mode, game over if answer is wrong (show continue button to view level screen)
             if (isWrongInCollab) {
-                if (!document.documentElement.lang === "ZH")
+                if (!document.documentElement.lang === "zh")
                     addSystemMessage('❌ Wrong answer! Game Over in Collab Mode.');
                 else
                     addSystemMessage('❌ 答案錯誤！協作模式遊戲結束。');
@@ -392,7 +426,7 @@ function connectSocket() {
                     
                     const continueBtn = document.createElement('button');
                     continueBtn.className = 'quiz-action-btn continue-btn';
-                    if (!document.documentElement.lang === "ZH")
+                    if (!document.documentElement.lang === "zh")
                         continueBtn.textContent = 'Continue';
                     else
                         continueBtn.textContent = '繼續';
@@ -429,7 +463,7 @@ function connectSocket() {
                     
                     const continueBtn = document.createElement('button');
                     continueBtn.className = 'quiz-action-btn continue-btn';
-                    if (!document.documentElement.lang === "ZH")
+                    if (!document.documentElement.lang === "zh")
                         continueBtn.textContent = 'Continue';
                     else
                         continueBtn.textContent = '繼續';
@@ -460,7 +494,7 @@ function connectSocket() {
                 
                 const continueBtn = document.createElement('button');
                 continueBtn.className = 'quiz-action-btn continue-btn';
-                    if (!document.documentElement.lang === "ZH")
+                    if (!document.documentElement.lang === "zh")
                         continueBtn.textContent = 'Continue';
                     else
                         continueBtn.textContent = '繼續';
@@ -500,7 +534,7 @@ function connectSocket() {
                         // Request new question
                         const chatMessages = document.getElementById('chatMessages');
                         chatMessages.innerHTML = '';
-                        if (!document.documentElement.lang === "ZH")
+                        if (!document.documentElement.lang === "zh")
                             addSystemMessage('🎲 Rolling a new question...');
                         else
                             addSystemMessage('🎲 正在擲出一個新問題...');
@@ -526,7 +560,7 @@ function connectSocket() {
         
         // Only show message if it's not from current player (to avoid duplicate messages)
         if (pName !== playerName) {
-            if (!document.documentElement.lang === "ZH")
+            if (!document.documentElement.lang === "zh")
                 addSystemMessage(`${pName} clicked continue`);
             else
                 addSystemMessage(`${pName} 點擊了繼續`);
@@ -579,7 +613,7 @@ function connectSocket() {
             const chatMessages = document.getElementById('chatMessages');
             if (chatMessages) {
                 chatMessages.innerHTML = '';
-                if (!document.documentElement.lang === "ZH")
+                if (!document.documentElement.lang === "zh")
                     addSystemMessage('🤖 Cooking up a spicy question...');
                 else
                     addSystemMessage('🤖 正在準備一個刺激的問題...');
@@ -615,7 +649,7 @@ function connectSocket() {
             const chatMessages = document.getElementById('chatMessages');
             if (chatMessages) {
                 chatMessages.innerHTML = '';
-                if (!document.documentElement.lang === "ZH")
+                if (!document.documentElement.lang === "zh")
                     addSystemMessage('🧠 Brain power activating...');
                 else
                     addSystemMessage('🧠 大腦啟動中...');
@@ -638,7 +672,7 @@ function createRoom() {
     const name = nameInput.value.trim();
     
     if (!name) {
-        if (!document.documentElement.lang === "ZH")
+        if (!document.documentElement.lang === "zh")
             showModal('Please enter your name');
         else
             showModal('請輸入您的名字');
@@ -668,7 +702,7 @@ function createRoom() {
                             subject: ''
                         });
                     } else {
-                        if (!document.documentElement.lang === "ZH")
+                        if (!document.documentElement.lang === "zh")
                             showModal('Failed to connect to server. Please try again.');
                         else
                             showModal('無法連接到伺服器。請再試一次。');
@@ -692,7 +726,7 @@ function joinRoom() {
     const code = codeInput.value.trim().toUpperCase();
     
     if (!name) {
-        if (!document.documentElement.lang === "ZH")
+        if (!document.documentElement.lang === "zh")
             showModal('Please enter your name');
         else
             showModal('請輸入您的名字');
@@ -700,7 +734,7 @@ function joinRoom() {
     }
     
     if (!code || code.length !== 6) {
-        if (!document.documentElement.lang === "ZH")
+        if (!document.documentElement.lang === "zh")
             showModal('Please enter a valid 6-character room code');
         else
             showModal('請輸入有效的6位數房間代碼');
@@ -725,7 +759,7 @@ function joinRoom() {
                         socket.emit('joinRoom', { roomCode: code, playerName: name });
                         showWaitingRoom(code);
                     } else {
-                        if (!document.documentElement.lang === "ZH")
+                        if (!document.documentElement.lang === "zh")
                             showModal('Failed to connect to server. Please try again.');
                         else
                             showModal('無法連接到伺服器。請再試一次。');
@@ -759,9 +793,9 @@ function showWaitingRoom(roomCode) {
         btn.className = 'subject-card';
         btn.setAttribute('data-subject-id', subj.id);
         btn.onclick = () => {
-            if (window.selectRoomSubject) window.selectRoomSubject(subj.id);
+            if (window.selectRoomSubject) window.selectRoomSubject(subj.id, document.documentElement.lang === "zh" ? subj.zh_name : subj.name);
         };
-        if (!document.documentElement.lang === "ZH")
+        if (document.documentElement.lang === "en")
             btn.innerHTML = `
                 <div class="subject-icon"><img class="subject-icon" src="${subj.image}" alt="${subj.name}"></div>
                 <div class="subject-name">${subj.name}</div>
@@ -784,8 +818,19 @@ function updatePlayersList(players) {
     `).join('');
 }
 
-function selectRoomSubject(subject) {
+function selectRoomSubject(subject, subjectTitle) {
     window.setCurrentSubject(subject);
+    
+    // If subjectTitle not provided, find it from SUBJECTS array (same as singleplayer)
+    if (!subjectTitle) {
+        const subjectObj = window.SUBJECTS && window.SUBJECTS.find(s => s.id === subject);
+        if (subjectObj) {
+            subjectTitle = document.documentElement.lang === "zh" ? subjectObj.zh_name : subjectObj.name;
+        } else {
+            subjectTitle = subject;
+        }
+    }
+    currentMultiplayerSubjectTitle = subjectTitle;
     
     // Update UI to show selected state using data attribute
     const subjectCards = document.querySelectorAll('.waiting-room-page .subject-card');
@@ -798,7 +843,7 @@ function selectRoomSubject(subject) {
     
     // Notify server of subject selection for real-time sync
     if (socket && currentRoomCode) {
-        socket.emit('setSubject', { roomCode: currentRoomCode, subject: subject });
+        socket.emit('setSubject', { roomCode: currentRoomCode, subject: subject, subjectTitle: subjectTitle });
     }
 }
 
@@ -808,7 +853,7 @@ function startMultiplayerGame() {
     console.log('Current subject:', currentSubject);
     console.log('Socket:', socket);
     console.log('Room code:', currentRoomCode);
-    if (!document.documentElement.lang === "ZH"){
+    if (!document.documentElement.lang === "zh"){
         if (!currentSubject) {
             showModal('Please select a subject first');
             return;
@@ -883,7 +928,7 @@ function goToRoomSetup(type) {
     window.setMultiplayerType(type);
     document.getElementById('multiplayerPage').style.display = 'none';
     document.getElementById('roomSetupPage').style.display = 'flex';
-    if (!document.documentElement.lang === "ZH"){
+    if (document.documentElement.lang === "en"){
         const modeText = type === 'collab' ? 'Collab' : 'Compete';
         document.getElementById('roomModeSubtitle').textContent = `${modeText} Mode - Create or join a room`;
     }
@@ -1068,7 +1113,7 @@ function showScoreScreen(scores) {
     title.style.color = 'white';
     title.style.marginBottom = '16px';
     title.style.fontSize = '18px';
-    if (!document.documentElement.lang === "ZH")
+    if (!document.documentElement.lang === "zh")
         title.textContent = 'Current Standings';
     else
         title.textContent = '目前排名';
@@ -1153,7 +1198,7 @@ function showLevelScreen(screenState = 'firstLevel') {
     
     // Update room code display
     if (levelRoomCode) {
-        if (!document.documentElement.lang === "ZH")
+        if (!document.documentElement.lang === "zh")
             levelRoomCode.textContent = `Room: ${currentRoomCode}`;
         else
             levelRoomCode.textContent = `房間: ${currentRoomCode}`;
@@ -1269,7 +1314,7 @@ function continueLevelScreen() {
     }
     
     // Always request question when continuing from level screen
-    if (!document.documentElement.lang === "ZH")
+    if (!document.documentElement.lang === "zh")
         addSystemMessage('🤖 Cooking up a spicy question...');
     else
         addSystemMessage('🤖 正在準備一個刺激的問題...');
@@ -1309,7 +1354,7 @@ function continueFromScore() {
     // Clear chat and request new question
     const chatMessages = document.getElementById('chatMessages');
     chatMessages.innerHTML = '';
-    if (!document.documentElement.lang === "ZH")
+    if (!document.documentElement.lang === "zh")
         addSystemMessage('✨ Summoning next challenge...');
     else
         addSystemMessage('✨ 正在召喚下一個挑戰...');
@@ -1337,7 +1382,7 @@ function endGame() {
     if (scoreScreen) scoreScreen.style.display = 'none';
     
     // Show completion message
-    if (!document.documentElement.lang === "ZH")
+    if (!document.documentElement.lang === "zh")
         addSystemMessage('🎉 Game Complete! All 12 questions finished!');
     else
         addSystemMessage('🎉 遊戲完成！所有12個問題都完成了！');
