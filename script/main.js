@@ -20,6 +20,7 @@ let chatMessages;
 let currentMode = 'singleplayer'; // 'singleplayer' or 'multiplayer'
 let currentSubject = 'History'; // Selected subject
 let CurrentSubjectTitle = ''; // Current subject title for display
+let isInGameLoop = false; // Track if we're in the singleplayer question loop
 
 // Audio management
 let audioContext = null;
@@ -630,8 +631,13 @@ function startChat(subject, subjectTitle) {
     // Show loading message
     const loadingDiv = addLoadingMessage();
     
+    // Detect current language from page
+    const currentLanguage = document.documentElement.lang || 'en';
+    
+    console.log('[Singleplayer] Starting with subject:', currentSubject, 'Language:', currentLanguage);
+    
     // Automatically send preset question based on subject
-    const presetQuestion = `Generate a ${subject.toLowerCase()} multiple choice question with 4 options. 
+    const presetQuestion = `Generate a ${currentSubject.toLowerCase()} multiple choice question with 4 options. 
 
 CRITICAL: You MUST respond ONLY in XML format. Do NOT use JSON. Do NOT use any other format.
 
@@ -656,7 +662,7 @@ Generate the question now using ONLY the XML format above:`;
         headers: {
             'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ message: presetQuestion , subject: currentSubject}),
+        body: JSON.stringify({ message: presetQuestion , subject: currentSubject, language: currentLanguage}),
     })
     .then(response => {
         if (!response.ok) {
@@ -1327,76 +1333,29 @@ async function handleAnswerSelection(selectedRow, selectedIndex, correctAnswer, 
         else
             backBtn.textContent = '返回';
 
-        backBtn.addEventListener('click', goBackToSubjects);
+        backBtn.addEventListener('click', () => {
+            // Exit the game loop
+            isInGameLoop = false;
+            goBackToSubjects();
+        });
         
         const continueBtn = document.createElement('button');
         continueBtn.className = 'quiz-action-btn continue-btn';
-        if (!document.documentElement.lang === "zh")
+        if (document.documentElement.lang === "en")
             continueBtn.textContent = 'Continue';
         else
             continueBtn.textContent = '繼續';
         continueBtn.addEventListener('click', () => {
+            // Set flag to stay in game loop
+            isInGameLoop = true;
+            
             // Play next question sound
             if (window.playNextQuestionSound) {
                 window.playNextQuestionSound();
             }
             
-            // Generate new question
-            if (!chatMessages) chatMessages = document.getElementById('chatMessages');
-            chatMessages.innerHTML = '';
-            const loadingDiv = addLoadingMessage();
-            
-            const multiplayerState = window.getMultiplayerState();
-            if (multiplayerState.isActive && multiplayerState.socket) {
-                // Multiplayer: request new question via socket
-                window.requestMultiplayerQuestion();
-                loadingDiv.remove();
-            } else {
-                // Singleplayer: fetch from API
-                const presetQuestion = `Make a ${currentSubject.toLowerCase()} multiple choice question with 4 options.
-
-CRITICAL: You MUST respond ONLY in XML format. Do NOT use JSON. Do NOT use any other format.
-
-Required XML structure:
-<question>
-    <text>Your question here</text>
-    <options>
-        <option>First option</option>
-        <option>Second option</option>
-        <option>Third option</option>
-        <option>Fourth option</option>
-    </options>
-    <answer>Index of correct option (0-based)</answer>
-</question>
-
-Generate the question now using ONLY the XML format above:`;
-                
-                const apiUrl = window.location.origin + '/chat';
-                fetch(apiUrl, {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                    },
-                    body: JSON.stringify({ message: presetQuestion })
-                })
-                .then(response => response.json())
-                .then(async data => {
-                    loadingDiv.remove();
-                    
-                    // Store the AI-verified correct answer if provided
-                    if (data.correctAnswer !== undefined) {
-                        window.currentCorrectAnswer = data.correctAnswer;
-                        console.log('[Singleplayer] AI-verified correct answer stored:', data.correctAnswer);
-                    }
-                    
-                    await addMessage(data.response, 'ai');
-                })
-                .catch(async error => {
-                    console.error('Error:', error);
-                    loadingDiv.remove();
-                    await addMessage('Sorry, I encountered an error. Please try again.', 'ai');
-                });
-            }
+            // Generate new question (will loop if isInGameLoop is true)
+            generateNextSingleplayerQuestion();
         });
         
         actionsDiv.appendChild(backBtn);
@@ -1418,6 +1377,81 @@ function addLoadingMessage() {
     chatMessages.scrollTop = chatMessages.scrollHeight;
     
     return messageDiv;
+}
+
+// Singleplayer game loop - generates questions continuously until user presses Back
+async function generateNextSingleplayerQuestion() {
+    // Check if we're still in the game loop
+    if (!isInGameLoop) {
+        console.log('[Singleplayer] Exiting game loop');
+        return;
+    }
+    
+    if (!chatMessages) chatMessages = document.getElementById('chatMessages');
+    chatMessages.innerHTML = '';
+    const loadingDiv = addLoadingMessage();
+    
+    // Check multiplayer state
+    const multiplayerState = window.getMultiplayerState && window.getMultiplayerState();
+    if (multiplayerState && multiplayerState.isActive && multiplayerState.socket) {
+        // Multiplayer: request new question via socket
+        window.requestMultiplayerQuestion();
+        loadingDiv.remove();
+    } else {
+        // Singleplayer: fetch from API with current subject and language
+        const currentLanguage = document.documentElement.lang || 'en';
+        
+        console.log('[Singleplayer] Requesting next question with:');
+        console.log('  Subject:', currentSubject);
+        console.log('  Language:', currentLanguage);
+        console.log('  HTML lang attribute:', document.documentElement.lang);
+        
+        const presetQuestion = `Generate a ${currentSubject.toLowerCase()} multiple choice question with 4 options.
+
+CRITICAL: You MUST respond ONLY in XML format. Do NOT use JSON. Do NOT use any other format.
+
+Required XML structure:
+<question>
+    <text>Your question here</text>
+    <options>
+        <option>First option</option>
+        <option>Second option</option>
+        <option>Third option</option>
+        <option>Fourth option</option>
+    </options>
+    <answer>Index of correct option (0-based)</answer>
+</question>
+
+Generate the question now using ONLY the XML format above:`;
+        
+        const apiUrl = window.location.origin + '/chat';
+        fetch(apiUrl, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ message: presetQuestion, subject: currentSubject, language: currentLanguage })
+        })
+        .then(response => response.json())
+        .then(async data => {
+            loadingDiv.remove();
+            
+            // Store the AI-verified correct answer if provided
+            if (data.correctAnswer !== undefined) {
+                window.currentCorrectAnswer = data.correctAnswer;
+                console.log('[Singleplayer] AI-verified correct answer stored:', data.correctAnswer);
+            }
+            
+            // Add the new question
+            await addMessage(data.response, 'ai');
+        })
+        .catch(async error => {
+            console.error('[Singleplayer] Error:', error);
+            loadingDiv.remove();
+            isInGameLoop = false; // Exit loop on error
+            await addMessage('Sorry, I encountered an error. Please try again.', 'ai');
+        });
+    }
 }
 
 // Expose functions to global scope for onclick handlers
@@ -1446,5 +1480,6 @@ window.playLevelFailedSound = playLevelFailedSound;
 window.stopLevelFailedSound = stopLevelFailedSound;
 window.playLevelBGM = playLevelBGM;
 window.stopLevelBGM = stopLevelBGM;
+window.generateNextSingleplayerQuestion = generateNextSingleplayerQuestion;
 
 console.log('Global functions registered successfully');

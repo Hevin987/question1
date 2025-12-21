@@ -40,6 +40,70 @@ function generateRoomCode() {
 }
 
 // ============================================================================
+// TRANSLATION FUNCTION using LibreTranslate
+// ============================================================================
+async function translateText(text, targetLanguage) {
+    // Only translate if target language is not English
+    if (targetLanguage === 'en') {
+        return text;
+    }
+
+    try {
+        // Map language codes to LibreTranslate codes
+        const languageMap = {
+            'zh': 'zh'  // Chinese (simplified)
+        };
+        
+        const targetLang = languageMap[targetLanguage] || targetLanguage;
+        
+        // Use a simple, reliable translation approach
+        // LibreTranslate public API
+        const response = await fetch('https://libretranslate.com/translate', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Accept': 'application/json'
+            },
+            body: JSON.stringify({
+                q: text.substring(0, 500),  // Limit text length
+                source: 'en',
+                target: targetLang
+            })
+        });
+
+        if (response.ok) {
+            const data = await response.json();
+            if (data.translatedText) {
+                console.log(`[Translation] Successfully translated to ${targetLang}`);
+                return data.translatedText;
+            }
+        } else {
+            console.warn(`[Translation] Server returned ${response.status}, trying alternative...`);
+        }
+
+        // Fallback: Use MyMemory API (completely free, no key needed)
+        console.log(`[Translation] Falling back to MyMemory API`);
+        const fallbackResponse = await fetch(
+            `https://api.mymemory.translated.net/get?q=${encodeURIComponent(text.substring(0, 500))}&langpair=en|${targetLang}`
+        );
+        
+        if (fallbackResponse.ok) {
+            const fallbackData = await fallbackResponse.json();
+            if (fallbackData.responseData && fallbackData.responseData.translatedText) {
+                console.log(`[Translation] MyMemory fallback successful`);
+                return fallbackData.responseData.translatedText;
+            }
+        }
+
+        console.warn('[Translation] All translation services failed, returning original text');
+        return text;
+    } catch (error) {
+        console.error('[Translation] Error translating text:', error.message);
+        return text; // Return original text if translation fails
+    }
+}
+
+// ============================================================================
 // UNIFIED GAME SEQUENCE (SINGLEPLAYER & MULTIPLAYER):
 // STEP 1: Game starts
 // STEP 2: AI generates question with 4 options
@@ -55,13 +119,14 @@ function generateRoomCode() {
 // UNIFIED SINGLEPLAYER ENDPOINT using the unified question generation function
 app.post('/chat', async (req, res) => {
     try {
-        const { message, subject } = req.body;
+        const { message, subject, language } = req.body;
         
         console.log('[ROUND] Game start - Initiating unified game sequence');
         
         // Get subject
-        let currentSubject = subject || 'General';
-        console.log(`[ROUND] STEP 1: Game started for subject: ${currentSubject}`);
+        let currentSubject = subject;
+        let targetLanguage = language || 'en';
+        console.log(`[ROUND] STEP 1: Game started for subject: ${currentSubject}, language: ${targetLanguage}`);
         
         // Use unified function to generate and validate question
         // STEP 2 & 3: Generate question and verify answer
@@ -69,7 +134,8 @@ app.post('/chat', async (req, res) => {
             currentSubject,
             [], // No conversation history for singleplayer initial question
             [], // No askedQuestions tracking for singleplayer
-            'singleplayer'
+            'singleplayer',
+            targetLanguage  // Pass target language to translation function
         );
         
         if (!result.parsedData || result.correctAnswerIndex === -1) {
@@ -445,7 +511,7 @@ async function findCorrectAnswerWithAI(question, options) {
 // Applies to both singleplayer and multiplayer
 // STEP 2 & 3: Generate question and verify answer
 // ============================================================================
-async function generateAndValidateQuestion(subject, conversationHistory = [], askedQuestions = [], mode = 'singleplayer') {
+async function generateAndValidateQuestion(subject, conversationHistory = [], askedQuestions = [], mode = 'singleplayer', targetLanguage = 'en') {
     let attempts = 0;
     let isDuplicate = true;
     let isValidJSON = false;
@@ -453,12 +519,18 @@ async function generateAndValidateQuestion(subject, conversationHistory = [], as
     let aiResponse = '';
     let parsedData = null;
     
+    // Ensure subject is properly capitalized for display
+    const displaySubject = subject.charAt(0).toUpperCase() + subject.slice(1).toLowerCase();
+    
     // Unlimited retries until we get valid question with correct answer
     while (isDuplicate || !isValidJSON || correctAnswerIndex === -1) {
         attempts++;
-        console.log(`[${mode.toUpperCase()}] Attempt ${attempts}: Generating question...`);
+        console.log(`[${mode.toUpperCase()}] Attempt ${attempts}: Generating ${displaySubject} question...`);
         
-        const baseMessage = `Generate a ${subject.toLowerCase()} multiple choice question with 4 options.
+        const baseMessage = `You MUST generate a multiple choice question ONLY about ${displaySubject}. Do NOT generate questions about other subjects.
+
+Topic: ${displaySubject}
+Generate a ${displaySubject.toLowerCase()} multiple choice question with 4 options.
 
 CRITICAL: You MUST respond ONLY in XML format. Do NOT use JSON. Do NOT use any other format.
 
@@ -474,7 +546,7 @@ Required XML structure:
     <answer>Index of correct option (0-based)</answer>
 </question>
 
-Generate the question now using ONLY the XML format above:`;
+Generate the ${displaySubject} question now using ONLY the XML format above:`;
         
         // Build messages array with conversation history for context
         const messages = [];
@@ -490,17 +562,17 @@ Generate the question now using ONLY the XML format above:`;
             if (!isValidJSON) {
                 messages.push({ 
                     role: "system", 
-                    content: "The previous response was invalid. Generate VALID XML format with all tags properly closed."
+                    content: `The previous response was invalid. Generate VALID XML format with all tags properly closed. Remember: ONLY about ${displaySubject}.`
                 });
             } else if (isDuplicate) {
                 messages.push({ 
                     role: "system", 
-                    content: `Generate a completely different ${subject.toLowerCase()} question than before. Stay within the ${subject} subject but use a different topic or concept.`
+                    content: `Generate a completely different ${displaySubject} question than before. Stay ONLY within the ${displaySubject} subject but use a different topic or concept.`
                 });
             } else if (correctAnswerIndex === -1) {
                 messages.push({ 
                     role: "system", 
-                    content: `The previous question had no correct answer. Generate a ${subject.toLowerCase()} question where ONE of the four options is DEFINITELY the correct answer.`
+                    content: `The previous question had no correct answer. Generate a ${displaySubject} question where ONE of the four options is DEFINITELY the correct answer. Make sure it's about ${displaySubject}.`
                 });
             }
         }
@@ -519,7 +591,7 @@ Generate the question now using ONLY the XML format above:`;
             aiResponse = chatCompletion.choices[0].message.content;
             console.log(`[${mode.toUpperCase()}] Response received, length: ${aiResponse.length}`);
             
-            // Parse the question
+            // STEP 1: Parse the XML response
             parsedData = parseQuizJSON(aiResponse);
             
             if (!parsedData) {
@@ -531,7 +603,8 @@ Generate the question now using ONLY the XML format above:`;
             
             // Valid XML!
             isValidJSON = true;
-            console.log(`[${mode.toUpperCase()}] Attempt ${attempts}: Valid XML parsed`);
+            console.log(`[${mode.toUpperCase()}] Attempt ${attempts}: Valid XML parsed for ${displaySubject}`);
+            console.log(`  Question: "${parsedData.question.substring(0, 80)}..."`);
             
             // Check for duplicates (only for multiplayer with askedQuestions)
             if (mode === 'multiplayer' && askedQuestions && askedQuestions.length > 0) {
@@ -558,7 +631,7 @@ Generate the question now using ONLY the XML format above:`;
                 isDuplicate = false; // Singleplayer doesn't check duplicates
             }
             
-            console.log(`[${mode.toUpperCase()}] Attempt ${attempts}: Question is unique, verifying answer...`);
+            console.log(`[${mode.toUpperCase()}] Attempt ${attempts}: Question is valid, verifying answer...`);
             
             // STEP 3: Verify the answer provided in the XML
             // Use the answer index from the XML (AI already decided which is correct)
@@ -574,7 +647,48 @@ Generate the question now using ONLY the XML format above:`;
                 console.log(`[${mode.toUpperCase()}] Attempt ${attempts}: AI-provided answer is WRONG! Regenerating...`);
                 isValidJSON = false;
             } else {
-                console.log(`[${mode.toUpperCase()}] Attempt ${attempts}: ✓ Valid question with correct answer: Option ${correctAnswerIndex + 1}`);
+                console.log(`[${mode.toUpperCase()}] Attempt ${attempts}: ✓ Valid ${displaySubject} question with correct answer: Option ${correctAnswerIndex + 1}`);
+                
+                // STEP 2: Translate parsed question and options AFTER verifying answer is correct
+                if (targetLanguage && targetLanguage !== 'en') {
+                    console.log(`[${mode.toUpperCase()}] [Translation] Translating verified question to ${targetLanguage}...`);
+                    
+                    // Transform parsed data into quoted format for translation
+                    // Format: "question"|"option1"|"option2"|"option3"|"option4" (using pipe delimiter to avoid conflicts with periods in question text)
+                    const combinedText = `"${parsedData.question}"|"${parsedData.options[0]}"|"${parsedData.options[1]}"|"${parsedData.options[2]}"|"${parsedData.options[3]}"`;
+                    console.log(`[${mode.toUpperCase()}] [Translation] Combined text: ${combinedText}`);
+                    
+                    // Translate the combined text
+                    const translatedCombined = await translateText(combinedText, targetLanguage);
+                    console.log(`[${mode.toUpperCase()}] [Translation] Translated: ${translatedCombined}`);
+                    
+                    // Parse translated text back
+                    // Method: Split by pipe delimiter (won't appear in content) and clean up quotes
+                    // Format after translation: "question"|"option1"|"option2"|"option3"|"option4"
+                    const parts = translatedCombined.split('|').map(part => {
+                        // Remove all types of quotes from the beginning and end
+                        return part.trim().replace(/^["'"\"\"'‹«‟❝【『「\s]+/, '').replace(/["'"\"\"'›»"❞】』」\s]+$/, '');
+                    }).filter(part => part.length > 0);
+                    
+                    console.log(`[${mode.toUpperCase()}] [Translation] Split into ${parts.length} parts:`, parts);
+                    
+                    if (parts.length === 5) {
+                        // Successfully extracted all 5 parts
+                        const translatedQuestion = parts[0];
+                        const translatedOptions = parts.slice(1, 5);
+                        
+                        // Update parsedData with translated content
+                        parsedData.question = translatedQuestion;
+                        parsedData.options = translatedOptions;
+                        
+                        console.log(`[${mode.toUpperCase()}] [Translation] ✓ Successfully translated`);
+                        console.log(`[${mode.toUpperCase()}] [Translation] Translated question: "${translatedQuestion}"`);
+                        console.log(`[${mode.toUpperCase()}] [Translation] Translated options: ${translatedOptions.join(' | ')}`);
+                    } else {
+                        console.warn(`[${mode.toUpperCase()}] [Translation] Could only extract ${parts.length} parts (expected 5), keeping original`);
+                        console.log(`[${mode.toUpperCase()}] [Translation] Extracted parts:`, parts);
+                    }
+                }
                 
                 // Store the question in askedQuestions for multiplayer
                 if (mode === 'multiplayer' && askedQuestions) {
@@ -588,9 +702,24 @@ Generate the question now using ONLY the XML format above:`;
         }
     }
     
+    // Reconstruct XML with potentially translated content
+    let finalXML = aiResponse;
+    if (targetLanguage && targetLanguage !== 'en' && parsedData) {
+        finalXML = `<question>
+    <text>${parsedData.question}</text>
+    <options>
+        <option>${parsedData.options[0]}</option>
+        <option>${parsedData.options[1]}</option>
+        <option>${parsedData.options[2]}</option>
+        <option>${parsedData.options[3]}</option>
+    </options>
+    <answer>${parsedData.answer}</answer>
+</question>`;
+    }
+    
     // Return the generated question with validated answer
     return {
-        aiResponse: aiResponse,
+        aiResponse: finalXML,
         parsedData: parsedData,
         correctAnswerIndex: correctAnswerIndex,
         attempts: attempts
