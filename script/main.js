@@ -13,7 +13,8 @@
 // ============================================================================
 
 //command selectRoomSubject('History')
-
+// switchLanguage(useChineseVersion)
+// toggleTheme(useLightMode)
 // Get elements (will be accessed when needed, not immediately)
 let chatMessages;
 
@@ -401,7 +402,12 @@ function stopMainBGM() {
 }
 
 // Auto-play music when page loads
+
 window.addEventListener('DOMContentLoaded', () => {
+    // Restore theme preference
+    restoreThemePreference();
+    // Restore game state from language switch
+    restoreGameState();
     // Initialize audio context and load all audio files
     initAudio();
     // Preload all sound effects
@@ -502,6 +508,8 @@ function renderSubjectGrid(mode) {
 
 // Render subject grids on page show
 window.addEventListener('DOMContentLoaded', () => {
+    // Restore game state from language switch
+    restoreGameState();
     renderSubjectGrid('singleplayer');
     renderSubjectGrid('multiplayer');
 });
@@ -1454,6 +1462,88 @@ Generate the question now using ONLY the XML format above:`;
     }
 }
 
+// ============================================================================
+// LANGUAGE SWITCHER FUNCTION
+// ============================================================================
+/**
+ * Switches between English (index.html) and Chinese (index_zh.html) versions
+ * WITHOUT preserving game state
+ * @param {boolean} useChineseVersion - true for Chinese, false for English
+ * @returns {boolean} - true if switch was successful
+ */
+function switchLanguage(useChineseVersion) {
+    try {
+        // Determine target URL
+        const baseUrl = window.location.origin + window.location.pathname.substring(0, window.location.pathname.lastIndexOf('/'));
+        const targetUrl = useChineseVersion ? 
+            baseUrl + '/index_zh.html' : 
+            baseUrl + '/index.html';
+        
+        // Navigate to the new language version (no state saving)
+        window.location.href = targetUrl;
+        return true;
+    } catch (error) {
+        console.error('Error switching language:', error);
+        return false;
+    }
+}
+
+/**
+ * Placeholder for future use - currently does nothing
+ */
+function restoreGameState() {
+    // No state restoration - just navigate to home page
+    return false;
+}
+
+// ============================================================================
+// THEME TOGGLE FUNCTION
+// ============================================================================
+/**
+ * Toggles between light and dark themes
+ * @param {boolean} useLightMode - true for light mode, false for dark mode
+ */
+function toggleTheme(useLightMode) {
+    try {
+        // Find the stylesheet link - try multiple selectors
+        let link = document.querySelector('link[href="styles.css"]') || 
+                   document.querySelector('link[href="styles-light.css"]') ||
+                   document.querySelector('link[rel="stylesheet"]:last-of-type');
+        
+        if (!link) {
+            console.warn('Stylesheet link not found');
+            return false;
+        }
+        
+        const newHref = useLightMode ? 'styles-light.css' : 'styles.css';
+        console.log('Switching theme to:', newHref);
+        link.href = newHref;
+        
+        // Save preference to localStorage
+        localStorage.setItem('themePreference', useLightMode ? 'light' : 'dark');
+        return true;
+    } catch (error) {
+        console.error('Error toggling theme:', error);
+        return false;
+    }
+}
+
+/**
+ * Restore theme preference from localStorage on page load
+ */
+function restoreThemePreference() {
+    try {
+        const savedTheme = localStorage.getItem('themePreference');
+        if (savedTheme === 'light') {
+            toggleTheme(true);
+        } else if (savedTheme === 'dark') {
+            toggleTheme(false);
+        }
+    } catch (error) {
+        console.log('Could not restore theme preference:', error);
+    }
+}
+
 // Expose functions to global scope for onclick handlers
 // Expose functions to global scope for onclick handlers
 console.log('Registering global functions...');
@@ -1481,5 +1571,9 @@ window.stopLevelFailedSound = stopLevelFailedSound;
 window.playLevelBGM = playLevelBGM;
 window.stopLevelBGM = stopLevelBGM;
 window.generateNextSingleplayerQuestion = generateNextSingleplayerQuestion;
+window.switchLanguage = switchLanguage;
+window.restoreGameState = restoreGameState;
+window.toggleTheme = toggleTheme;
+window.restoreThemePreference = restoreThemePreference;
 
 console.log('Global functions registered successfully');
