@@ -1501,7 +1501,7 @@ function restoreGameState() {
 // ============================================================================
 /**
  * Toggles between light and dark themes
- * @param {boolean} useLightMode - true for light mode, false for dark mode
+ * @param {boolean} useLightMode - true for dark mode, false for light mode
  */
 function toggleTheme(useLightMode) {
     try {
@@ -1535,9 +1535,9 @@ function restoreThemePreference() {
     try {
         const savedTheme = localStorage.getItem('themePreference');
         if (savedTheme === 'light') {
-            toggleTheme(true);
-        } else if (savedTheme === 'dark') {
             toggleTheme(false);
+        } else if (savedTheme === 'dark') {
+            toggleTheme(true);
         }
     } catch (error) {
         console.log('Could not restore theme preference:', error);
