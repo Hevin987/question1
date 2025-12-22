@@ -1473,6 +1473,14 @@ Generate the question now using ONLY the XML format above:`;
  */
 function switchLanguage(useChineseVersion) {
     try {
+        // Save current theme preference before switching language
+        const currentLink = document.querySelector('link[href="styles.css"]') || 
+                           document.querySelector('link[href="styles-light.css"]');
+        if (currentLink) {
+            const isCurrentlyDark = currentLink.href.includes('styles.css') && !currentLink.href.includes('styles-light.css');
+            localStorage.setItem('themePreference', isCurrentlyDark ? 'dark' : 'light');
+        }
+        
         // Determine target URL
         const baseUrl = window.location.origin + window.location.pathname.substring(0, window.location.pathname.lastIndexOf('/'));
         const targetUrl = useChineseVersion ? 
