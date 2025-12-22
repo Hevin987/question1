@@ -1515,12 +1515,12 @@ function toggleTheme(useLightMode) {
             return false;
         }
         
-        const newHref = useLightMode ? 'styles-light.css' : 'styles.css';
+        const newHref = useLightMode ? 'styles.css' : 'styles-light.css';
         console.log('Switching theme to:', newHref);
         link.href = newHref;
         
         // Save preference to localStorage
-        localStorage.setItem('themePreference', useLightMode ? 'light' : 'dark');
+        localStorage.setItem('themePreference', useLightMode ? 'dark' : 'light');
         return true;
     } catch (error) {
         console.error('Error toggling theme:', error);
