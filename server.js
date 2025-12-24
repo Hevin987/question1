@@ -128,14 +128,15 @@ app.post('/chat', async (req, res) => {
         let targetLanguage = language || 'en';
         console.log(`[ROUND] STEP 1: Game started for subject: ${currentSubject}, language: ${targetLanguage}`);
         
-        // Use unified function to generate and validate question
+        // Use unified function to generate and validate question with 10-second retry delay
         // STEP 2 & 3: Generate question and verify answer
         const result = await generateAndValidateQuestion(
             currentSubject,
             [], // No conversation history for singleplayer initial question
             [], // No askedQuestions tracking for singleplayer
             'singleplayer',
-            targetLanguage  // Pass target language to translation function
+            targetLanguage,  // Pass target language to translation function
+            true // Enable 10-second retry delay
         );
         
         if (!result.parsedData || result.correctAnswerIndex === -1) {
@@ -511,7 +512,7 @@ async function findCorrectAnswerWithAI(question, options) {
 // Applies to both singleplayer and multiplayer
 // STEP 2 & 3: Generate question and verify answer
 // ============================================================================
-async function generateAndValidateQuestion(subject, conversationHistory = [], askedQuestions = [], mode = 'singleplayer', targetLanguage = 'en') {
+async function generateAndValidateQuestion(subject, conversationHistory = [], askedQuestions = [], mode = 'singleplayer', targetLanguage = 'en', enableRetryDelay = false) {
     let attempts = 0;
     let isDuplicate = true;
     let isValidJSON = false;
@@ -525,6 +526,13 @@ async function generateAndValidateQuestion(subject, conversationHistory = [], as
     // Unlimited retries until we get valid question with correct answer
     while (isDuplicate || !isValidJSON || correctAnswerIndex === -1) {
         attempts++;
+        
+        // Add 10-second delay before each retry attempt (except first attempt)
+        if (enableRetryDelay && attempts > 1) {
+            console.log(`[${mode.toUpperCase()}] Attempt ${attempts}: Waiting 10 seconds before retry...`);
+            await new Promise(resolve => setTimeout(resolve, 10000));
+        }
+        
         console.log(`[${mode.toUpperCase()}] Attempt ${attempts}: Generating ${displaySubject} question...`);
         
         const baseMessage = `You MUST generate a multiple choice question ONLY about ${displaySubject}. Do NOT generate questions about other subjects.
@@ -618,7 +626,7 @@ Generate the ${displaySubject} question now using ONLY the XML format above:`;
                         maxSimilarity = similarity;
                         mostSimilarQuestion = asked;
                     }
-                    return similarity > 0.5; // 50% similarity threshold
+                    return similarity > 0.75; // 75% similarity threshold (increased from 50% for stricter duplicate detection)
                 });
                 
                 if (isDuplicate) {
@@ -726,7 +734,7 @@ Generate the ${displaySubject} question now using ONLY the XML format above:`;
     };
 }
 
-// Helper function to calculate text similarity
+// Helper function to calculate text similarity using Levenshtein distance
 function calculateSimilarity(str1, str2) {
     if (!str1 || !str2) return 0;
     
@@ -738,19 +746,43 @@ function calculateSimilarity(str1, str2) {
     // Check exact match first
     if (s1 === s2) return 1.0;
     
-    // Word-based similarity check
-    const words1 = s1.split(/\s+/).filter(w => w.length > 2);
-    const words2 = s2.split(/\s+/).filter(w => w.length > 2);
+    // Calculate Levenshtein distance (edit distance)
+    const levenshteinDistance = (a, b) => {
+        const matrix = [];
+        
+        for (let i = 0; i <= b.length; i++) {
+            matrix[i] = [i];
+        }
+        
+        for (let j = 0; j <= a.length; j++) {
+            matrix[0][j] = j;
+        }
+        
+        for (let i = 1; i <= b.length; i++) {
+            for (let j = 1; j <= a.length; j++) {
+                if (b.charAt(i - 1) === a.charAt(j - 1)) {
+                    matrix[i][j] = matrix[i - 1][j - 1];
+                } else {
+                    matrix[i][j] = Math.min(
+                        matrix[i - 1][j - 1] + 1, // substitution
+                        matrix[i][j - 1] + 1,     // insertion
+                        matrix[i - 1][j] + 1      // deletion
+                    );
+                }
+            }
+        }
+        
+        return matrix[b.length][a.length];
+    };
     
-    if (words1.length === 0 || words2.length === 0) return 0;
+    const distance = levenshteinDistance(s1, s2);
+    const maxLength = Math.max(s1.length, s2.length);
     
-    // Calculate Jaccard similarity (intersection over union)
-    const set1 = new Set(words1);
-    const set2 = new Set(words2);
-    const intersection = [...set1].filter(w => set2.has(w)).length;
-    const union = new Set([...set1, ...set2]).size;
+    // Convert distance to similarity (0 to 1)
+    // Similarity = 1 - (distance / maxLength)
+    const similarity = 1 - (distance / maxLength);
     
-    return union > 0 ? intersection / union : 0;
+    return Math.max(0, Math.min(1, similarity));
 }
 
 io.on('connection', (socket) => {
@@ -776,6 +808,7 @@ io.on('connection', (socket) => {
         const roomCode = generateRoomCode();
         rooms.set(roomCode, {
             players: [{ id: socket.id, name: playerName, score: 0 }],
+            hostId: socket.id, // Track the host (room creator)
             currentQuestion: null,
             correctAnswer: null,
             mode: mode, // 'collab' or 'compete'
@@ -783,7 +816,9 @@ io.on('connection', (socket) => {
             answers: new Map(), // playerId -> answer
             answerTimer: null,
             conversationHistory: [], // Track Q&A for AI memory
-            askedQuestions: [] // Track asked questions to prevent duplicates
+            askedQuestions: [], // Track asked questions to prevent duplicates
+            isGameActive: false, // Track if a game round is currently playing
+            gameState: null // Store game state for syncing joining players
         });
         playerRooms.set(socket.id, roomCode);
         socket.join(roomCode);
@@ -809,6 +844,13 @@ io.on('connection', (socket) => {
             players: room.players,
             subject: room.subject // Include current subject selection
         });
+        
+        // If a game round is currently active, sync the joining player with current game state
+        if (room.isGameActive && room.gameState) {
+            console.log(`${playerName} joined during active game, syncing game state`);
+            socket.emit('syncGameState', room.gameState);
+        }
+        
         console.log(`${playerName} joined room ${roomCode}`);
     });
 
@@ -826,12 +868,14 @@ io.on('connection', (socket) => {
             
             console.log(`[MULTIPLAYER] STEP 2-3: Requesting new question for room ${roomCode}`);
             
-            // Use unified function to generate and validate question
+            // Use unified function to generate and validate question with 10-second retry delay
             const result = await generateAndValidateQuestion(
                 room.subject,
                 room.conversationHistory,
                 room.askedQuestions,
-                'multiplayer'
+                'multiplayer',
+                'en', // Default language
+                true // Enable 10-second retry delay
             );
             
             if (!result.parsedData || result.correctAnswerIndex === -1) {
@@ -848,6 +892,15 @@ io.on('connection', (socket) => {
             room.correctAnswer = result.correctAnswerIndex;
             room.answers.clear();
             
+            // Store game state for new players joining during active round
+            room.gameState = {
+                currentQuestion: result.aiResponse,
+                parsedQuestionData: result.parsedData,
+                correctAnswer: result.correctAnswerIndex,
+                currentLevel: room.currentLevel || 0,
+                mode: room.mode
+            };
+            
             // Emit question to all players
             console.log('Emitting question to all players');
             io.to(roomCode).emit('newQuestion', { question: result.aiResponse });
@@ -859,8 +912,8 @@ io.on('connection', (socket) => {
         }
     });
 
-    // Set subject (real-time sync)
-    socket.on('setSubject', ({ roomCode, subject }) => {
+    // Set subject (real-time sync) - ANYONE can change subject
+    socket.on('setSubject', ({ roomCode, subject, subjectTitle }) => {
         const room = rooms.get(roomCode);
         if (!room) return;
 
@@ -869,14 +922,15 @@ io.on('connection', (socket) => {
 
         room.subject = subject;
 
-        // Notify all other players in the room
+        // Notify all other players in the room - subject can be changed by anyone
         socket.to(roomCode).emit('subjectChanged', {
             subject,
+            subjectTitle,
             playerName: player.name
         });
     });
 
-    // Start game (broadcast to all players)
+    // Start game (broadcast to all players) - ONLY HOST CAN START
     socket.on('startGame', async ({ roomCode }) => {
         console.log('startGame event received for room:', roomCode);
         const room = rooms.get(roomCode);
@@ -892,11 +946,21 @@ io.on('connection', (socket) => {
             return;
         }
         
+        // Check if this player is the host
+        if (socket.id !== room.hostId) {
+            console.log(`Player ${player.name} tried to start game but is not the host`);
+            socket.emit('error', { message: 'Only the host can start the game' });
+            return;
+        }
+        
         if (!room.subject) {
             console.log('No subject selected');
             socket.emit('error', { message: 'Please select a subject first' });
             return;
         }
+        
+        // Mark game as active
+        room.isGameActive = true;
 
         console.log(`Starting game for room ${roomCode}, subject: ${room.subject}`);
         
@@ -922,12 +986,14 @@ io.on('connection', (socket) => {
         console.log('[MULTIPLAYER] STEP 1-3: Starting game and generating first question for compete mode');
         
         try {
-            // Use unified function to generate and validate first question
+            // Use unified function to generate and validate first question with 10-second retry delay
             const result = await generateAndValidateQuestion(
                 room.subject,
                 [], // No conversation history yet
                 room.askedQuestions,
-                'multiplayer'
+                'multiplayer',
+                'en', // Default language
+                true // Enable 10-second retry delay
             );
             
             if (!result.parsedData || result.correctAnswerIndex === -1) {
@@ -1187,15 +1253,22 @@ io.on('connection', (socket) => {
         }
     });
 
-    // Player clicked continue button
+    // Player clicked continue button - ONLY HOST CAN CONTINUE
     socket.on('playerContinue', ({ roomCode, action, scores }) => {
         const room = rooms.get(roomCode);
         if (!room) return;
 
         const player = room.players.find(p => p.id === socket.id);
         if (!player) return;
+        
+        // Check if this player is the host
+        if (socket.id !== room.hostId) {
+            console.log(`Player ${player.name} tried to continue but is not the host`);
+            socket.emit('error', { message: 'Only the host can click continue' });
+            return;
+        }
 
-        console.log(`${player.name} clicked continue with action: ${action}`);
+        console.log(`${player.name} (host) clicked continue with action: ${action}`);
         
         // Broadcast to all OTHER players in the room (sender already handled locally)
         // This ensures proper sync when any player clicks continue

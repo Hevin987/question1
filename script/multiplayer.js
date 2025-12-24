@@ -16,6 +16,7 @@
 let socket = null;
 let currentRoomCode = '';
 let playerName = '';
+let isHost = false; // Track if current player is the host (room creator)
 let isMultiplayerActive = false;
 let multiplayerType = ''; // 'collab' or 'compete'
 let timerInterval = null;
@@ -120,6 +121,7 @@ function connectSocket() {
     socket.on('roomCreated', ({ roomCode, playerName: pName }) => {
         currentRoomCode = roomCode;
         playerName = pName;
+        isHost = true; // Player who creates the room is the host
         showWaitingRoom(roomCode);
     });
     
@@ -152,6 +154,32 @@ function connectSocket() {
                 if (card.getAttribute('data-subject-id') === subject) {
                     card.classList.add('selected');
                 }
+            });
+        }
+    });
+    
+    socket.on('playerLeft', ({ players }) => {
+        updatePlayersList(players);
+        if (!document.documentElement.lang === "zh")
+            addSystemMessage('A player left the room');
+        else
+            addSystemMessage('有玩家離開了房間');
+    });
+    
+    // Sync game state when a player joins during an active round
+    socket.on('syncGameState', ({ currentQuestion, parsedQuestionData, correctAnswer, currentLevel, mode }) => {
+        console.log('Received game state sync:', { currentLevel, mode });
+        
+        // Update local game state
+        currentLevel = currentLevel || 0;
+        levelStatus = Array(12).fill('unanswered');
+        
+        // Show the question immediately
+        if (currentQuestion) {
+            window.addMessage(currentQuestion, 'ai').then(() => {
+                console.log('[Client] Synced question UI ready');
+                socket.emit('questionReady', { roomCode: currentRoomCode });
+                startTimer(30); // Start visual timer display for 30 seconds
             });
         }
     });
@@ -552,7 +580,16 @@ function connectSocket() {
     });
     
     socket.on('error', ({ message }) => {
-        showModal(message);
+        console.error('Server error:', message);
+        // Check if it's a host-only error
+        if (message.includes('Only the host')) {
+            if (!document.documentElement.lang === "zh")
+                addSystemMessage('⏳ Only the host can perform this action');
+            else
+                addSystemMessage('⏳ 只有主機玩家才能執行此操作');
+        } else {
+            showModal(message);
+        }
     });
     
     socket.on('playerContinued', ({ action, playerName: pName, scores }) => {
@@ -853,6 +890,17 @@ function startMultiplayerGame() {
     console.log('Current subject:', currentSubject);
     console.log('Socket:', socket);
     console.log('Room code:', currentRoomCode);
+    console.log('Is host:', isHost);
+    
+    // Check if player is the host
+    if (!isHost) {
+        if (!document.documentElement.lang === "zh")
+            showModal('Only the host can start the game');
+        else
+            showModal('只有主機玩家才能開始遊戲');
+        return;
+    }
+    
     if (!document.documentElement.lang === "zh"){
         if (!currentSubject) {
             showModal('Please select a subject first');
@@ -950,6 +998,17 @@ function goBackToMultiplayerMode() {
 }
 
 // Request new question in multiplayer
+function checkHostAndNotify() {
+    if (!isHost) {
+        if (!document.documentElement.lang === "zh")
+            addSystemMessage('⏳ Waiting for the host to continue...');
+        else
+            addSystemMessage('⏳ 等待主機玩家繼續遊戲...');
+        return false;
+    }
+    return true;
+}
+
 function requestMultiplayerQuestion() {
     if (socket && currentRoomCode) {
         // Send conversation history for AI context
@@ -1245,6 +1304,9 @@ function showLevelScreen(screenState = 'firstLevel') {
 }
 
 function continueLevelScreen() {
+    // Check if player is the host
+    if (!checkHostAndNotify()) return;
+    
     const levelProgressPage = document.getElementById('levelProgressPage');
     const chatContainer = document.getElementById('chatContainer');
     
@@ -1329,6 +1391,8 @@ function continueLevelScreen() {
 }
 
 function continueFromScore() {
+    if (!checkHostAndNotify()) return;
+    
     // Notify server that a player clicked continue from score screen
     if (socket && currentRoomCode) {
         socket.emit('playerContinue', { roomCode: currentRoomCode, action: 'nextQuestion' });
