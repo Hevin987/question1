@@ -34,6 +34,22 @@ const AI_MODEL = "deepseek-ai/DeepSeek-V3.2";
 const rooms = new Map(); // roomId -> { players: [], currentQuestion: {}, scores: {}, mode: 'collab'/'compete' }
 const playerRooms = new Map(); // playerId -> roomId
 
+// Store connected clients for server logs
+let logSubscribers = new Set();
+
+// Wrapper function to broadcast logs to HTML console
+function broadcastLog(message, type = 'log') {
+    const logMessage = typeof message === 'string' ? message : JSON.stringify(message);
+    console.log(logMessage);
+    logSubscribers.forEach(socket => {
+        socket.emit('serverLog', {
+            message: logMessage,
+            type: type,
+            timestamp: new Date()
+        });
+    });
+}
+
 // Generate room code
 function generateRoomCode() {
     return Math.random().toString(36).substring(2, 8).toUpperCase();
@@ -74,15 +90,15 @@ async function translateText(text, targetLanguage) {
         if (response.ok) {
             const data = await response.json();
             if (data.translatedText) {
-                console.log(`[Translation] Successfully translated to ${targetLang}`);
+                broadcastLog(`[Translation] Successfully translated to ${targetLang}`);
                 return data.translatedText;
             }
         } else {
-            console.warn(`[Translation] Server returned ${response.status}, trying alternative...`);
+            broadcastLog(`[Translation] Server returned ${response.status}, trying alternative...`, 'warn');
         }
 
         // Fallback: Use MyMemory API (completely free, no key needed)
-        console.log(`[Translation] Falling back to MyMemory API`);
+        broadcastLog(`[Translation] Falling back to MyMemory API`);
         const fallbackResponse = await fetch(
             `https://api.mymemory.translated.net/get?q=${encodeURIComponent(text.substring(0, 500))}&langpair=en|${targetLang}`
         );
@@ -90,15 +106,15 @@ async function translateText(text, targetLanguage) {
         if (fallbackResponse.ok) {
             const fallbackData = await fallbackResponse.json();
             if (fallbackData.responseData && fallbackData.responseData.translatedText) {
-                console.log(`[Translation] MyMemory fallback successful`);
+                broadcastLog(`[Translation] MyMemory fallback successful`);
                 return fallbackData.responseData.translatedText;
             }
         }
 
-        console.warn('[Translation] All translation services failed, returning original text');
+        broadcastLog('[Translation] All translation services failed, returning original text', 'warn');
         return text;
     } catch (error) {
-        console.error('[Translation] Error translating text:', error.message);
+        broadcastLog('[Translation] Error translating text: ' + error.message, 'error');
         return text; // Return original text if translation fails
     }
 }
@@ -121,12 +137,12 @@ app.post('/chat', async (req, res) => {
     try {
         const { message, subject, language } = req.body;
         
-        console.log('[ROUND] Game start - Initiating unified game sequence');
+        broadcastLog('[ROUND] Game start - Initiating unified game sequence');
         
         // Get subject
         let currentSubject = subject;
         let targetLanguage = language || 'en';
-        console.log(`[ROUND] STEP 1: Game started for subject: ${currentSubject}, language: ${targetLanguage}`);
+        broadcastLog(`[ROUND] STEP 1: Game started for subject: ${currentSubject}, language: ${targetLanguage}`);
         
         // Use unified function to generate and validate question with 10-second retry delay
         // STEP 2 & 3: Generate question and verify answer
@@ -140,15 +156,15 @@ app.post('/chat', async (req, res) => {
         );
         
         if (!result.parsedData || result.correctAnswerIndex === -1) {
-            console.error('[ROUND] Failed to generate valid question after multiple attempts');
+            broadcastLog('[ROUND] Failed to generate valid question after multiple attempts', 'error');
             return res.status(500).json({ 
                 error: 'Failed to generate valid question',
                 attempts: result.attempts
             });
         }
         
-        console.log(`[ROUND] STEP 5: Valid question ready (after ${result.attempts} attempts)`);
-        console.log('[ROUND] STEP 6: Timer will start on client side after UI render');
+        broadcastLog(`[ROUND] STEP 5: Valid question ready (after ${result.attempts} attempts)`);
+        broadcastLog('[ROUND] STEP 6: Timer will start on client side after UI render');
         
         // Return both the raw response and verified answer
         res.json({ 
@@ -157,7 +173,7 @@ app.post('/chat', async (req, res) => {
         });
 
     } catch (error) {
-        console.error('[ROUND] Error in unified game sequence:', error);
+        broadcastLog('[ROUND] Error in unified game sequence: ' + error.message, 'error');
         res.status(500).json({ 
             error: 'Failed to initiate game',
             details: error.message 
@@ -177,16 +193,16 @@ app.post('/checkAnswer', async (req, res) => {
             return res.status(400).json({ error: 'Missing required fields' });
         }
         
-        console.log('[ROUND] STEP 7-8: Checking answer...');
-        console.log(`Question: "${question.substring(0, 60)}..."`);
-        console.log(`Selected: "${selectedAnswer}" (Index: ${allOptions.indexOf(selectedAnswer)})`);
-        console.log(`Correct: "${allOptions[correctAnswerIndex]}" (Index: ${correctAnswerIndex})`);
+        broadcastLog('[ROUND] STEP 7-8: Checking answer...');
+        broadcastLog(`Question: "${question.substring(0, 60)}..."`);
+        broadcastLog(`Selected: "${selectedAnswer}" (Index: ${allOptions.indexOf(selectedAnswer)})`);
+        broadcastLog(`Correct: "${allOptions[correctAnswerIndex]}" (Index: ${correctAnswerIndex})`);
         
         // STEP 7-8: Compare indices directly (answer already verified during question generation)
         const selectedIndex = allOptions.indexOf(selectedAnswer);
         const isCorrect = (selectedIndex === correctAnswerIndex);
         
-        console.log(`Result: ${isCorrect ? '✓ CORRECT' : '✗ INCORRECT'}`);
+        broadcastLog(`Result: ${isCorrect ? '✓ CORRECT' : '✗ INCORRECT'}`);
         
         // Return verification result
         res.json({ 
@@ -196,7 +212,7 @@ app.post('/checkAnswer', async (req, res) => {
         });
         
     } catch (error) {
-        console.error('[ROUND] Error checking answer:', error);
+        broadcastLog('[ROUND] Error checking answer: ' + error.message, 'error');
         res.status(500).json({ 
             error: 'Failed to check answer',
             details: error.message 
@@ -208,17 +224,17 @@ app.post('/checkAnswer', async (req, res) => {
 // Helper function to parse quiz JSON (matches client-side logic)
 function parseQuizJSON(text) {
     try {
-        console.log('[Original AI Response]:', text);
-        console.log('[Response Length]:', text.length);
+        broadcastLog('[Original AI Response]: ' + text.substring(0, 100));
+        broadcastLog('[Response Length]: ' + text.length);
         
         let jsonText = null;
         
         // First, check for XML format
         const xmlMatch = text.match(/<question>[\s\S]*?<\/question>/);
         if (xmlMatch) {
-            console.log('[XML Format Detected] Parsing XML format...');
+            broadcastLog('[XML Format Detected] Parsing XML format...');
             const xmlText = xmlMatch[0];
-            console.log('[XML Content]:', xmlText);
+            broadcastLog('[XML Content]: ' + xmlText.substring(0, 100));
             
             // Extract question text
             const questionMatch = xmlText.match(/<text>([\s\S]*?)<\/text>/);
@@ -252,14 +268,14 @@ function parseQuizJSON(text) {
             }
             
             if (question && options.length > 0) {
-                console.log('[XML Parsed Successfully]:', { question: question.substring(0, 60) + '...', optionsCount: options.length, answer });
+                broadcastLog('[XML Parsed Successfully]: question length=' + question.length + ', options=' + options.length + ', answer=' + answer);
                 return {
                     question: question,
                     options: options,
                     answer: answer
                 };
             } else {
-                console.log('[XML Parse Failed] Missing question or options');
+                broadcastLog('[XML Parse Failed] Missing question or options');
             }
         }
         
@@ -280,7 +296,7 @@ function parseQuizJSON(text) {
             const jsonObjectMatch = cleanedText.match(/\{[\s\S]*"question"[\s\S]*\}/);
             
             if (!jsonObjectMatch) {
-                console.log('No JSON found in response');
+                broadcastLog('No JSON found in response');
                 return null;
             }
             
@@ -294,7 +310,7 @@ function parseQuizJSON(text) {
         // Fix malformed options array: ["A": "text", "B": "text"] to [{"A": "text"}, {"B": "text"}]
         // First, detect if we have this malformed format
         if (/"options"\s*:\s*\[\s*"[A-F]"\s*:/.test(jsonText)) {
-            console.log('Detected malformed options array format, fixing...');
+            broadcastLog('Detected malformed options array format, fixing...');
             
             // Extract the options array
             const optionsMatch = jsonText.match(/"options"\s*:\s*\[([^\]]+)\]/);
@@ -314,7 +330,7 @@ function parseQuizJSON(text) {
                 fixedOptions = fixedOptions.replace(/("\s*)\]$/, '$1}]');
                 
                 jsonText = jsonText.replace(originalOptions, fixedOptions);
-                console.log('Fixed options array format');
+                broadcastLog('Fixed options array format');
             }
         }
         
@@ -330,14 +346,14 @@ function parseQuizJSON(text) {
         try {
             data = JSON.parse(jsonText);
         } catch (e) {
-            console.log('First parse attempt failed:', e.message);
-            console.log('JSON text causing error:', jsonText.substring(0, 300));
+            broadcastLog('First parse attempt failed: ' + e.message);
+            broadcastLog('JSON text causing error: ' + jsonText.substring(0, 300));
             // Additional cleanup for Python-style syntax
             jsonText = jsonText.replace(/'/g, '"'); // Replace single quotes with double quotes
             try {
                 data = JSON.parse(jsonText);
             } catch (e2) {
-                console.log('Second parse attempt also failed:', e2.message);
+                broadcastLog('Second parse attempt also failed: ' + e2.message);
                 return null;
             }
         }
@@ -450,8 +466,8 @@ Consider:
 
 Respond with ONLY one word: "YES" if correct, "NO" if incorrect or inaccurate.`;
         
-        console.log(`[AI Checking] Question: "${question.substring(0, 60)}..."`);
-        console.log(`[AI Checking] Testing answer: "${answer.substring(0, 60)}..."`);
+        broadcastLog(`[AI Checking] Question: "${question.substring(0, 60)}..."`);
+        broadcastLog(`[AI Checking] Testing answer: "${answer.substring(0, 60)}..."`);
         
         const chatCompletion = await client.chat.completions.create({
             model: AI_MODEL,
@@ -461,8 +477,8 @@ Respond with ONLY one word: "YES" if correct, "NO" if incorrect or inaccurate.`;
         });
 
         const aiResponse = chatCompletion.choices[0].message.content.toLowerCase().trim();
-        console.log('[Original AI Response - Answer Verification]:', chatCompletion.choices[0].message.content);
-        console.log(`[AI Response] AI says: "${aiResponse}"`);
+        broadcastLog('[Original AI Response - Answer Verification]: ' + chatCompletion.choices[0].message.content);
+        broadcastLog(`[AI Response] AI says: "${aiResponse}`);
         
         // Check for various yes/no variations
         const yesVariations = ['yes', 'yeah', 'yep', 'yup', 'correct', 'true', 'right', 'affirmative'];
@@ -470,40 +486,40 @@ Respond with ONLY one word: "YES" if correct, "NO" if incorrect or inaccurate.`;
         
         for (const variation of yesVariations) {
             if (aiResponse.includes(variation)) {
-                console.log(`[AI Checking] Result: CORRECT (matched "${variation}")`);
+                broadcastLog(`[AI Checking] Result: CORRECT (matched "${variation}")`);
                 return true;
             }
         }
         
         for (const variation of noVariations) {
             if (aiResponse.includes(variation)) {
-                console.log(`[AI Checking] Result: INCORRECT (matched "${variation}")`);
+                broadcastLog(`[AI Checking] Result: INCORRECT (matched "${variation}")`);
                 return false;
             }
         }
         
-        console.log('[AI Checking] Result: UNCERTAIN (defaulting to false)');
+        broadcastLog('[AI Checking] Result: UNCERTAIN (defaulting to false)');
         return false;
     } catch (error) {
-        console.error('[AI Checking] Error verifying answer with AI:', error);
+        broadcastLog('[AI Checking] Error verifying answer with AI: ' + error.message, 'error');
         return false;
     }
 }
 
 // Helper function to find correct answer by checking all options
 async function findCorrectAnswerWithAI(question, options) {
-    console.log(`Verifying all options for question: "${question.substring(0, 60)}..."`);
+    broadcastLog(`Verifying all options for question: "${question.substring(0, 60)}..."`);
     
     for (let i = 0; i < options.length; i++) {
         const isCorrect = await verifyAnswerWithAI(question, options[i]);
-        console.log(`  Option ${i + 1} (${options[i].substring(0, 40)}...): ${isCorrect ? '✓ CORRECT' : '✗ Wrong'}`);
+        broadcastLog(`  Option ${i + 1} (${options[i].substring(0, 40)}...): ${isCorrect ? '✓ CORRECT' : '✗ Wrong'}`);
         
         if (isCorrect) {
             return i;
         }
     }
     
-    console.log('  Warning: No correct answer found among all options');
+    broadcastLog('  Warning: No correct answer found among all options');
     return -1; // Return -1 to indicate no correct answer found
 }
 
@@ -529,11 +545,11 @@ async function generateAndValidateQuestion(subject, conversationHistory = [], as
         
         // Add 10-second delay before each retry attempt (except first attempt)
         if (enableRetryDelay && attempts > 1) {
-            console.log(`[${mode.toUpperCase()}] Attempt ${attempts}: Waiting 10 seconds before retry...`);
+            broadcastLog(`[${mode.toUpperCase()}] Attempt ${attempts}: Waiting 10 seconds before retry...`);
             await new Promise(resolve => setTimeout(resolve, 10000));
         }
         
-        console.log(`[${mode.toUpperCase()}] Attempt ${attempts}: Generating ${displaySubject} question...`);
+        broadcastLog(`[${mode.toUpperCase()}] Attempt ${attempts}: Generating ${displaySubject} question...`);
         
         const baseMessage = `You MUST generate a multiple choice question ONLY about ${displaySubject}. Do NOT generate questions about other subjects.
 
@@ -597,13 +613,13 @@ Generate the ${displaySubject} question now using ONLY the XML format above:`;
             });
 
             aiResponse = chatCompletion.choices[0].message.content;
-            console.log(`[${mode.toUpperCase()}] Response received, length: ${aiResponse.length}`);
+            broadcastLog(`[${mode.toUpperCase()}] Response received, length: ${aiResponse.length}`);
             
             // STEP 1: Parse the XML response
             parsedData = parseQuizJSON(aiResponse);
             
             if (!parsedData) {
-                console.log(`[${mode.toUpperCase()}] Attempt ${attempts}: Failed to parse XML`);
+                broadcastLog(`[${mode.toUpperCase()}] Attempt ${attempts}: Failed to parse XML`);
                 isValidJSON = false;
                 isDuplicate = true;
                 continue;
@@ -611,8 +627,8 @@ Generate the ${displaySubject} question now using ONLY the XML format above:`;
             
             // Valid XML!
             isValidJSON = true;
-            console.log(`[${mode.toUpperCase()}] Attempt ${attempts}: Valid XML parsed for ${displaySubject}`);
-            console.log(`  Question: "${parsedData.question.substring(0, 80)}..."`);
+            broadcastLog(`[${mode.toUpperCase()}] Attempt ${attempts}: Valid XML parsed for ${displaySubject}`);
+            broadcastLog(`  Question: "${parsedData.question.substring(0, 80)}..."`);
             
             // Check for duplicates (only for multiplayer with askedQuestions)
             if (mode === 'multiplayer' && askedQuestions && askedQuestions.length > 0) {
@@ -630,16 +646,16 @@ Generate the ${displaySubject} question now using ONLY the XML format above:`;
                 });
                 
                 if (isDuplicate) {
-                    console.log(`[${mode.toUpperCase()}] Attempt ${attempts}: Duplicate detected (${(maxSimilarity * 100).toFixed(1)}% similar)`);
-                    console.log(`  New: "${newQuestion.substring(0, 60)}..."`);
-                    console.log(`  Old: "${mostSimilarQuestion.substring(0, 60)}..."`);
+                    broadcastLog(`[${mode.toUpperCase()}] Attempt ${attempts}: Duplicate detected (${(maxSimilarity * 100).toFixed(1)}% similar)`);
+                    broadcastLog(`  New: "${newQuestion.substring(0, 60)}..."`);
+                    broadcastLog(`  Old: "${mostSimilarQuestion.substring(0, 60)}..."`);
                     continue;
                 }
             } else {
                 isDuplicate = false; // Singleplayer doesn't check duplicates
             }
             
-            console.log(`[${mode.toUpperCase()}] Attempt ${attempts}: Question is valid, verifying answer...`);
+            broadcastLog(`[${mode.toUpperCase()}] Attempt ${attempts}: Question is valid, verifying answer...`);
             
             // STEP 3: Verify the answer provided in the XML
             // Use the answer index from the XML (AI already decided which is correct)
@@ -649,36 +665,36 @@ Generate the ${displaySubject} question now using ONLY the XML format above:`;
             const aiProvidedAnswer = parsedData.options[correctAnswerIndex];
             const isAnswerCorrect = await verifyAnswerWithAI(parsedData.question, aiProvidedAnswer);
             
-            console.log(`[${mode.toUpperCase()}] Verifying AI-provided answer: Option ${correctAnswerIndex + 1} ("${aiProvidedAnswer.substring(0, 50)}...")`);
+            broadcastLog(`[${mode.toUpperCase()}] Verifying AI-provided answer: Option ${correctAnswerIndex + 1} ("${aiProvidedAnswer.substring(0, 50)}...")`);
             
             if (!isAnswerCorrect) {
-                console.log(`[${mode.toUpperCase()}] Attempt ${attempts}: AI-provided answer is WRONG! Regenerating...`);
+                broadcastLog(`[${mode.toUpperCase()}] Attempt ${attempts}: AI-provided answer is WRONG! Regenerating...`);
                 isValidJSON = false;
             } else {
-                console.log(`[${mode.toUpperCase()}] Attempt ${attempts}: ✓ Valid ${displaySubject} question with correct answer: Option ${correctAnswerIndex + 1}`);
+                broadcastLog(`[${mode.toUpperCase()}] Attempt ${attempts}: ✓ Valid ${displaySubject} question with correct answer: Option ${correctAnswerIndex + 1}`);
                 
                 // STEP 2: Translate parsed question and options AFTER verifying answer is correct
                 if (targetLanguage && targetLanguage !== 'en') {
-                    console.log(`[${mode.toUpperCase()}] [Translation] Translating verified question to ${targetLanguage}...`);
+                    broadcastLog(`[${mode.toUpperCase()}] [Translation] Translating verified question to ${targetLanguage}...`);
                     
                     // Transform parsed data into quoted format for translation
                     // Format: "question"|"option1"|"option2"|"option3"|"option4" (using pipe delimiter to avoid conflicts with periods in question text)
                     const combinedText = `"${parsedData.question}"|"${parsedData.options[0]}"|"${parsedData.options[1]}"|"${parsedData.options[2]}"|"${parsedData.options[3]}"`;
-                    console.log(`[${mode.toUpperCase()}] [Translation] Combined text: ${combinedText}`);
+                    broadcastLog(`[${mode.toUpperCase()}] [Translation] Combined text: ${combinedText.substring(0, 100)}...`);
                     
                     // Translate the combined text
                     const translatedCombined = await translateText(combinedText, targetLanguage);
-                    console.log(`[${mode.toUpperCase()}] [Translation] Translated: ${translatedCombined}`);
+                    broadcastLog(`[${mode.toUpperCase()}] [Translation] Translated: ${translatedCombined.substring(0, 100)}...`);
                     
                     // Parse translated text back
                     // Method: Split by pipe delimiter (won't appear in content) and clean up quotes
                     // Format after translation: "question"|"option1"|"option2"|"option3"|"option4"
                     const parts = translatedCombined.split('|').map(part => {
                         // Remove all types of quotes from the beginning and end
-                        return part.trim().replace(/^["'"\"\"'‹«‟❝【『「\s]+/, '').replace(/["'"\"\"'›»"❞】』」\s]+$/, '');
+                        return part.trim().replace(/^["'"\"\"'?�«‟�??�『「\s]+/, '').replace(/["'"\"\"'?��??�】』」\s]+$/, '');
                     }).filter(part => part.length > 0);
                     
-                    console.log(`[${mode.toUpperCase()}] [Translation] Split into ${parts.length} parts:`, parts);
+                    broadcastLog(`[${mode.toUpperCase()}] [Translation] Split into ${parts.length} parts`);
                     
                     if (parts.length === 5) {
                         // Successfully extracted all 5 parts
@@ -689,23 +705,22 @@ Generate the ${displaySubject} question now using ONLY the XML format above:`;
                         parsedData.question = translatedQuestion;
                         parsedData.options = translatedOptions;
                         
-                        console.log(`[${mode.toUpperCase()}] [Translation] ✓ Successfully translated`);
-                        console.log(`[${mode.toUpperCase()}] [Translation] Translated question: "${translatedQuestion}"`);
-                        console.log(`[${mode.toUpperCase()}] [Translation] Translated options: ${translatedOptions.join(' | ')}`);
+                        broadcastLog(`[${mode.toUpperCase()}] [Translation] ✓ Successfully translated`);
+                        broadcastLog(`[${mode.toUpperCase()}] [Translation] Translated question: "${translatedQuestion.substring(0, 80)}..."`);
+                        broadcastLog(`[${mode.toUpperCase()}] [Translation] Translated options: ${translatedOptions.slice(0, 2).join(' | ')}...`);
                     } else {
-                        console.warn(`[${mode.toUpperCase()}] [Translation] Could only extract ${parts.length} parts (expected 5), keeping original`);
-                        console.log(`[${mode.toUpperCase()}] [Translation] Extracted parts:`, parts);
+                        broadcastLog(`[${mode.toUpperCase()}] [Translation] Could only extract ${parts.length} parts (expected 5), keeping original`, 'warn');
                     }
                 }
                 
                 // Store the question in askedQuestions for multiplayer
                 if (mode === 'multiplayer' && askedQuestions) {
                     askedQuestions.push(parsedData.question);
-                    console.log(`  Total questions in round: ${askedQuestions.length}`);
+                    broadcastLog(`  Total questions in round: ${askedQuestions.length}`);
                 }
             }
         } catch (error) {
-            console.error(`[${mode.toUpperCase()}] Error generating question:`, error.message);
+            broadcastLog(`[${mode.toUpperCase()}] Error generating question: ${error.message}`, 'error');
             isValidJSON = false;
         }
     }
@@ -790,10 +805,7 @@ function calculateSimilarity(str1, str2) {
     // Similarity = 1 - (distance / maxLength)
     const similarity = 1 - (distance / maxLength);
     
-    console.log(`[Similarity Debug] Strings compared:`);
-    console.log(`  S1: "${s1.substring(0, 80)}..."`);
-    console.log(`  S2: "${s2.substring(0, 80)}..."`);
-    console.log(`  Distance: ${distance}, MaxLength: ${maxLength}, Similarity: ${similarity.toFixed(3)}`);
+    broadcastLog(`[Similarity Debug] S1 vs S2: distance=${distance}, similarity=${similarity.toFixed(3)}`);
     
     return Math.max(0, Math.min(1, similarity));
 }
@@ -812,9 +824,23 @@ io.on('connection', (socket) => {
             }
             // Broadcast to all players (UI already handled on client)
             io.to(roomCode).emit('collabWrongAnswer', { playerName, selectedIndex });
-            console.log(`[Collab] Game over in room ${roomCode} due to wrong answer by ${playerName}`);
+            broadcastLog(`[Collab] Game over in room ${roomCode} due to wrong answer by ${playerName}`);
         });
-    console.log('Player connected:', socket.id);
+    
+    // Add this socket to log subscribers so it receives server logs
+    logSubscribers.add(socket);
+    
+    // Handle explicit log subscription (client can subscribe to logs)
+    socket.on('subscribeToLogs', () => {
+        logSubscribers.add(socket);
+    });
+    
+    // Remove from subscribers when disconnecting
+    socket.once('disconnect', () => {
+        logSubscribers.delete(socket);
+    });
+    
+    broadcastLog('Player connected: ' + socket.id);
 
     // Create or join room
     socket.on('createRoom', ({ playerName, mode, subject }) => {
@@ -838,7 +864,7 @@ io.on('connection', (socket) => {
         socket.join(roomCode);
         
         socket.emit('roomCreated', { roomCode, playerName });
-        console.log(`Room ${roomCode} created by ${playerName}`);
+        broadcastLog(`Room ${roomCode} created by ${playerName}`);
     });
 
     socket.on('joinRoom', ({ roomCode, playerName }) => {
@@ -861,11 +887,11 @@ io.on('connection', (socket) => {
         
         // If a game round is currently active, sync the joining player with current game state
         if (room.isGameActive && room.gameState) {
-            console.log(`${playerName} joined during active game, syncing game state`);
+            broadcastLog(`${playerName} joined during active game, syncing game state`);
             socket.emit('syncGameState', room.gameState);
         }
         
-        console.log(`${playerName} joined room ${roomCode}`);
+        broadcastLog(`${playerName} joined room ${roomCode}`);
     });
 
     // Request new question
@@ -880,7 +906,7 @@ io.on('connection', (socket) => {
                 room.conversationHistory = conversationHistory;
             }
             
-            console.log(`[MULTIPLAYER] STEP 2-3: Requesting new question for room ${roomCode}`);
+            broadcastLog(`[MULTIPLAYER] STEP 2-3: Requesting new question for room ${roomCode}`);
             
             // Use unified function to generate and validate question with 10-second retry delay
             const result = await generateAndValidateQuestion(
@@ -893,12 +919,12 @@ io.on('connection', (socket) => {
             );
             
             if (!result.parsedData || result.correctAnswerIndex === -1) {
-                console.error('[MULTIPLAYER] Failed to generate valid question after multiple attempts');
+                broadcastLog('[MULTIPLAYER] Failed to generate valid question after multiple attempts', 'error');
                 socket.emit('error', { message: 'Failed to generate question' });
                 return;
             }
             
-            console.log(`[MULTIPLAYER] STEP 5: Valid question ready (after ${result.attempts} attempts)`);
+            broadcastLog(`[MULTIPLAYER] STEP 5: Valid question ready (after ${result.attempts} attempts)`);
             
             // Store the parsed data for answer verification later
             room.currentQuestion = result.aiResponse;
@@ -921,12 +947,12 @@ io.on('connection', (socket) => {
             };
             
             // Emit question to all players
-            console.log('Emitting question to all players');
+            broadcastLog('Emitting question to all players');
             io.to(roomCode).emit('newQuestion', { question: result.aiResponse });
             
             // STEP 6: Timer will start when client emits 'questionReady' after rendering buttons
         } catch (error) {
-            console.error('[MULTIPLAYER] Error generating question:', error);
+            broadcastLog('[MULTIPLAYER] Error generating question: ' + error.message, 'error');
             socket.emit('error', { message: 'Failed to generate question' });
         }
     });
@@ -951,29 +977,29 @@ io.on('connection', (socket) => {
 
     // Start game (broadcast to all players) - ONLY HOST CAN START
     socket.on('startGame', async ({ roomCode }) => {
-        console.log('startGame event received for room:', roomCode);
+        broadcastLog('startGame event received for room:', roomCode);
         const room = rooms.get(roomCode);
         if (!room) {
-            console.log('Room not found:', roomCode);
+            broadcastLog('Room not found:', roomCode);
             socket.emit('error', { message: 'Room not found' });
             return;
         }
 
         const player = room.players.find(p => p.id === socket.id);
         if (!player) {
-            console.log('Player not found in room');
+            broadcastLog('Player not found in room');
             return;
         }
         
         // Check if this player is the host
         if (socket.id !== room.hostId) {
-            console.log(`Player ${player.name} tried to start game but is not the host`);
+            broadcastLog(`Player ${player.name} tried to start game but is not the host`);
             socket.emit('error', { message: 'Only the host can start the game' });
             return;
         }
         
         if (!room.subject) {
-            console.log('No subject selected');
+            broadcastLog('No subject selected');
             socket.emit('error', { message: 'Please select a subject first' });
             return;
         }
@@ -981,7 +1007,7 @@ io.on('connection', (socket) => {
         // Mark game as active
         room.isGameActive = true;
 
-        console.log(`Starting game for room ${roomCode}, subject: ${room.subject}`);
+        broadcastLog(`Starting game for room ${roomCode}, subject: ${room.subject}`);
         
         // Clear previous game data
         room.askedQuestions = []; // Reset asked questions for new game
@@ -997,12 +1023,12 @@ io.on('connection', (socket) => {
         // In collab mode, don't generate first question automatically
         // Question will be generated when client requests it after level progress screen
         if (room.mode === 'collab') {
-            console.log('Collab mode: Skipping automatic first question generation');
+            broadcastLog('Collab mode: Skipping automatic first question generation');
             return;
         }
 
         // In compete mode, generate first question immediately using UNIFIED FUNCTION
-        console.log('[MULTIPLAYER] STEP 1-3: Starting game and generating first question for compete mode');
+        broadcastLog('[MULTIPLAYER] STEP 1-3: Starting game and generating first question for compete mode');
         
         try {
             // Use unified function to generate and validate first question with 10-second retry delay
@@ -1016,12 +1042,12 @@ io.on('connection', (socket) => {
             );
             
             if (!result.parsedData || result.correctAnswerIndex === -1) {
-                console.error('[MULTIPLAYER] Failed to generate first question after multiple attempts');
+                broadcastLog('[MULTIPLAYER] Failed to generate first question after multiple attempts');
                 socket.emit('error', { message: 'Failed to generate first question' });
                 return;
             }
             
-            console.log(`[MULTIPLAYER] STEP 5: First question ready (after ${result.attempts} attempts)`);
+            broadcastLog(`[MULTIPLAYER] STEP 5: First question ready (after ${result.attempts} attempts)`);
             
             // Store question data in room
             room.currentQuestion = result.aiResponse;
@@ -1048,7 +1074,7 @@ io.on('connection', (socket) => {
             
             // STEP 6: Timer will start when client emits 'questionReady' after rendering buttons
         } catch (error) {
-            console.error('[MULTIPLAYER] Error generating first question:', error);
+            broadcastLog('[MULTIPLAYER] Error generating first question:', error);
             socket.emit('error', { message: 'Failed to generate question' });
         }
     });
@@ -1063,10 +1089,10 @@ io.on('connection', (socket) => {
             clearTimeout(room.answerTimer);
         }
         
-        console.log('[Timer] Question UI ready, starting 30-second timer');
+        broadcastLog('[Timer] Question UI ready, starting 30-second timer');
         // Start 30-second timer now that buttons are clickable
         room.answerTimer = setTimeout(async () => {
-            console.log('[Timer] Time expired! Checking answers with AI...');
+            broadcastLog('[Timer] Time expired! Checking answers with AI...');
             
             // Signal all clients to stop visual timer
             io.to(roomCode).emit('stopTimer');
@@ -1081,7 +1107,7 @@ io.on('connection', (socket) => {
                     room.correctAnswer = room.parsedQuestionData.answer;
                     // If all options are wrong, default to first option
                     if (room.correctAnswer === -1) {
-                        console.log('[Timer] Warning: All options are wrong, defaulting to option 0');
+                        broadcastLog('[Timer] Warning: All options are wrong, defaulting to option 0');
                         room.correctAnswer = 0;
                     }
                 }
@@ -1139,26 +1165,26 @@ io.on('connection', (socket) => {
 
     // Submit answer
     socket.on('submitAnswer', async ({ roomCode, answer }) => {
-        console.log('submitAnswer received:', { roomCode, answer, socketId: socket.id });
+        broadcastLog('submitAnswer received:', { roomCode, answer, socketId: socket.id });
         const room = rooms.get(roomCode);
         if (!room) {
-            console.log('Room not found:', roomCode);
+            broadcastLog('Room not found:', roomCode);
             return;
         }
 
         const player = room.players.find(p => p.id === socket.id);
         if (!player) {
-            console.log('Player not found in room');
+            broadcastLog('Player not found in room');
             return;
         }
 
         // Store answer without isCorrect - will be determined after AI verification
         room.answers.set(socket.id, { answer, playerName: player.name, selectedIndex: answer });
-        console.log(`Player ${player.name} answered. Total answers: ${room.answers.size}/${room.players.length}`);
+        broadcastLog(`Player ${player.name} answered. Total answers: ${room.answers.size}/${room.players.length}`);
 
         // In collab mode, reveal immediately when first player answers
         if (room.mode === 'collab' && room.answers.size === 1) {
-            console.log('Collab mode: First answer received, syncing selection');
+            broadcastLog('Collab mode: First answer received, syncing selection');
             
             // Broadcast the selection to all other players
             socket.to(roomCode).emit('collabAnswerSelected', {
@@ -1167,7 +1193,7 @@ io.on('connection', (socket) => {
             });
             
             // Stop the timer
-            console.log('[Timer] Stopping timer - all players answered in collab mode');
+            broadcastLog('[Timer] Stopping timer - all players answered in collab mode');
             if (room.answerTimer) {
                 clearTimeout(room.answerTimer);
                 room.answerTimer = null;
@@ -1177,7 +1203,7 @@ io.on('connection', (socket) => {
             io.to(roomCode).emit('aiCheckingStart');
             
             // Use AI-verified answer from question generation (no additional AI call needed)
-            console.log('[AI Verification] Using pre-verified answer from question generation...');
+            broadcastLog('[AI Verification] Using pre-verified answer from question generation...');
             if (room.parsedQuestionData) {
                 room.correctAnswer = room.parsedQuestionData.answer;
             }
@@ -1225,9 +1251,9 @@ io.on('connection', (socket) => {
         
         // Check if all players have answered (compete mode)
         if (room.answers.size === room.players.length) {
-            console.log('All players answered!');
+            broadcastLog('All players answered!');
             // Stop the timer since all answered
-            console.log('[Timer] Stopping timer - all players answered');
+            broadcastLog('[Timer] Stopping timer - all players answered');
             if (room.answerTimer) {
                 clearTimeout(room.answerTimer);
                 room.answerTimer = null;
@@ -1240,12 +1266,12 @@ io.on('connection', (socket) => {
             io.to(roomCode).emit('aiCheckingStart');
             
             // Use AI-verified answer from question generation (no additional AI call needed)
-            console.log('[AI Verification] Using pre-verified answer from question generation...');
+            broadcastLog('[AI Verification] Using pre-verified answer from question generation...');
             if (room.parsedQuestionData) {
                 room.correctAnswer = room.parsedQuestionData.answer;
                 // If all options are wrong, default to first option
                 if (room.correctAnswer === -1) {
-                    console.log('[Compete] Warning: All options are wrong, defaulting to option 0');
+                    broadcastLog('[Compete] Warning: All options are wrong, defaulting to option 0');
                     room.correctAnswer = 0;
                 }
             }
@@ -1270,7 +1296,7 @@ io.on('connection', (socket) => {
                 };
             });
             
-            console.log('Emitting revealAnswers:', { correctAnswer: room.correctAnswer, playerAnswers });
+            broadcastLog('Emitting revealAnswers:', { correctAnswer: room.correctAnswer, playerAnswers });
             io.to(roomCode).emit('revealAnswers', {
                 correctAnswer: room.correctAnswer,
                 playerAnswers: playerAnswers,
@@ -1296,17 +1322,17 @@ io.on('connection', (socket) => {
         
         // Check if this player is the host
         if (socket.id !== room.hostId) {
-            console.log(`Player ${player.name} tried to continue but is not the host`);
+            broadcastLog(`Player ${player.name} tried to continue but is not the host`);
             socket.emit('error', { message: 'Only the host can click continue' });
             return;
         }
 
-        console.log(`${player.name} (host) clicked continue with action: ${action}`);
+        broadcastLog(`${player.name} (host) clicked continue with action: ${action}`);
         
         // Increment level for level/nextQuestion actions
         if (action === 'levelScreen' || action === 'nextQuestion' || action === 'continueLevelScreen') {
             room.currentLevel++;
-            console.log(`[MULTIPLAYER] Level incremented to ${room.currentLevel}`);
+            broadcastLog(`[MULTIPLAYER] Level incremented to ${room.currentLevel}`);
         }
         
         // Broadcast to all OTHER players in the room (sender already handled locally)
@@ -1332,7 +1358,7 @@ io.on('connection', (socket) => {
                         clearTimeout(room.answerTimer);
                     }
                     rooms.delete(roomCode);
-                    console.log(`Room ${roomCode} deleted (empty)`);
+                    broadcastLog(`Room ${roomCode} deleted (empty)`);
                 } else {
                     io.to(roomCode).emit('playerLeft', {
                         players: room.players
@@ -1341,14 +1367,14 @@ io.on('connection', (socket) => {
             }
             playerRooms.delete(socket.id);
         }
-        console.log('Player disconnected:', socket.id);
+        broadcastLog('Player disconnected:', socket.id);
     });
 });
 
 // Function to verify AI model at startup
 async function verifyAIModel() {
     try {
-        console.log('Model checking');
+        broadcastLog('Model checking');
         const testCompletion = await client.chat.completions.create({
             model: AI_MODEL,
             messages: [{ role: "user", content: "test" }],
@@ -1356,16 +1382,17 @@ async function verifyAIModel() {
         });
         
         const modelUsed = testCompletion.model;
-        console.log(`✓ AI Model verified: ${modelUsed}`);
+        broadcastLog(`✓ AI Model verified: ${modelUsed}`);
         return modelUsed;
     } catch (error) {
-        console.error('✗ Failed to verify AI model:', error.message);
+        broadcastLog(`✗ Failed to verify AI model: ${error.message}`, 'error');
         return null;
     }
 }
 
 httpServer.listen(PORT, '0.0.0.0', async () => {
-    console.log(`Server running on port ${PORT}`);
-    console.log('');
+    broadcastLog(`Server running on port ${PORT}`);
+    broadcastLog('');
+
     await verifyAIModel();
 });
