@@ -738,10 +738,18 @@ Generate the ${displaySubject} question now using ONLY the XML format above:`;
 function calculateSimilarity(str1, str2) {
     if (!str1 || !str2) return 0;
     
-    // Normalize strings
-    const normalize = (s) => s.toLowerCase().replace(/[^a-z0-9\s]/g, '').trim();
+    // Normalize strings - keep alphanumeric (including Unicode) and spaces
+    // Remove only punctuation and special symbols, keep Chinese characters
+    const normalize = (s) => s.toLowerCase()
+        .replace(/[^\p{L}\p{N}\s]/gu, '') // Keep Unicode letters, numbers, and spaces
+        .replace(/\s+/g, ' ')              // Normalize multiple spaces to single space
+        .trim();
+    
     const s1 = normalize(str1);
     const s2 = normalize(str2);
+    
+    // If either string is empty after normalization, return 0 (no similarity)
+    if (!s1 || !s2) return 0;
     
     // Check exact match first
     if (s1 === s2) return 1.0;
@@ -782,6 +790,11 @@ function calculateSimilarity(str1, str2) {
     // Similarity = 1 - (distance / maxLength)
     const similarity = 1 - (distance / maxLength);
     
+    console.log(`[Similarity Debug] Strings compared:`);
+    console.log(`  S1: "${s1.substring(0, 80)}..."`);
+    console.log(`  S2: "${s2.substring(0, 80)}..."`);
+    console.log(`  Distance: ${distance}, MaxLength: ${maxLength}, Similarity: ${similarity.toFixed(3)}`);
+    
     return Math.max(0, Math.min(1, similarity));
 }
 
@@ -818,7 +831,8 @@ io.on('connection', (socket) => {
             conversationHistory: [], // Track Q&A for AI memory
             askedQuestions: [], // Track asked questions to prevent duplicates
             isGameActive: false, // Track if a game round is currently playing
-            gameState: null // Store game state for syncing joining players
+            gameState: null, // Store game state for syncing joining players
+            currentLevel: 0 // Track current question level (0-11)
         });
         playerRooms.set(socket.id, roomCode);
         socket.join(roomCode);
@@ -891,14 +905,19 @@ io.on('connection', (socket) => {
             room.parsedQuestionData = result.parsedData;
             room.correctAnswer = result.correctAnswerIndex;
             room.answers.clear();
+            room.questionStartTime = Date.now(); // Track when question was sent
             
             // Store game state for new players joining during active round
             room.gameState = {
                 currentQuestion: result.aiResponse,
                 parsedQuestionData: result.parsedData,
                 correctAnswer: result.correctAnswerIndex,
-                currentLevel: room.currentLevel || 0,
-                mode: room.mode
+                currentLevelSynced: room.currentLevel,
+                mode: room.mode,
+                subject: room.subject,
+                subjectTitle: room.subjectTitle || room.subject,
+                questionStartTime: room.questionStartTime, // Track question send time
+                timerDuration: 30 // Timer duration in seconds
             };
             
             // Emit question to all players
@@ -1009,6 +1028,20 @@ io.on('connection', (socket) => {
             room.parsedQuestionData = result.parsedData;
             room.correctAnswer = result.correctAnswerIndex;
             room.answers.clear();
+            room.questionStartTime = Date.now(); // Track when question was sent
+            
+            // Store game state for new players joining during active round
+            room.gameState = {
+                currentQuestion: result.aiResponse,
+                parsedQuestionData: result.parsedData,
+                correctAnswer: result.correctAnswerIndex,
+                currentLevelSynced: room.currentLevel,
+                mode: room.mode,
+                subject: room.subject,
+                subjectTitle: room.subjectTitle || room.subject,
+                questionStartTime: room.questionStartTime, // Track question send time
+                timerDuration: 30 // Timer duration in seconds
+            };
             
             // Emit the first question to all players
             io.to(roomCode).emit('newQuestion', { question: room.currentQuestion });
@@ -1269,6 +1302,12 @@ io.on('connection', (socket) => {
         }
 
         console.log(`${player.name} (host) clicked continue with action: ${action}`);
+        
+        // Increment level for level/nextQuestion actions
+        if (action === 'levelScreen' || action === 'nextQuestion' || action === 'continueLevelScreen') {
+            room.currentLevel++;
+            console.log(`[MULTIPLAYER] Level incremented to ${room.currentLevel}`);
+        }
         
         // Broadcast to all OTHER players in the room (sender already handled locally)
         // This ensures proper sync when any player clicks continue

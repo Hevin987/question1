@@ -167,19 +167,61 @@ function connectSocket() {
     });
     
     // Sync game state when a player joins during an active round
-    socket.on('syncGameState', ({ currentQuestion, parsedQuestionData, correctAnswer, currentLevel, mode }) => {
-        console.log('Received game state sync:', { currentLevel, mode });
+    socket.on('syncGameState', ({ currentQuestion, parsedQuestionData, correctAnswer, currentLevelSynced, mode, subject, subjectTitle, questionStartTime, timerDuration }) => {
+        console.log('Received game state sync:', { currentLevelSynced, mode, subject, questionStartTime });
         
         // Update local game state
-        currentLevel = currentLevel || 0;
+        currentLevel = currentLevelSynced || 0;
         levelStatus = Array(12).fill('unanswered');
+        multiplayerType = mode;
+        
+        // Set subject
+        if (subject) {
+            window.setCurrentSubject(subject);
+            if (subjectTitle) {
+                currentMultiplayerSubjectTitle = subjectTitle;
+            }
+        }
+        
+        // Hide waiting room and show chat container
+        document.getElementById('waitingRoomPage').style.display = 'none';
+        document.getElementById('chatContainer').style.display = 'flex';
+        
+        // Update chat title with subject and mode
+        if (!document.documentElement.lang === "zh"){
+            const modeText = mode === 'collab' ? 'Collab' : 'Compete';
+            document.getElementById('chatTitle').textContent = `${currentMultiplayerSubjectTitle} - ${modeText} Mode`;
+            document.getElementById('chatSubtitle').textContent = `Room: ${currentRoomCode}`;
+        } else {
+            const modeText = mode === 'collab' ? '協作' : '競爭';
+            document.getElementById('chatTitle').textContent = `${currentMultiplayerSubjectTitle}-${modeText}模式`;
+            document.getElementById('chatSubtitle').textContent = `房間: ${currentRoomCode}`;
+        }
+        
+        // Clear chat and add system message
+        const chatMessages = document.getElementById('chatMessages');
+        chatMessages.innerHTML = '';
+        if (!document.documentElement.lang === "zh")
+            addSystemMessage(`📍 Joined at Question ${currentLevel + 1}/12`);
+        else
+            addSystemMessage(`📍 加入了第 ${currentLevel + 1}/12 題`);
         
         // Show the question immediately
         if (currentQuestion) {
             window.addMessage(currentQuestion, 'ai').then(() => {
                 console.log('[Client] Synced question UI ready');
                 socket.emit('questionReady', { roomCode: currentRoomCode });
-                startTimer(30); // Start visual timer display for 30 seconds
+                
+                // Calculate remaining time based on when question was sent
+                const elapsedTime = Math.floor((Date.now() - questionStartTime) / 1000);
+                const remainingTime = Math.max(0, (timerDuration || 30) - elapsedTime);
+                
+                console.log(`[Timer Sync] Elapsed: ${elapsedTime}s, Remaining: ${remainingTime}s`);
+                
+                // Start timer with remaining time
+                if (remainingTime > 0) {
+                    startTimerWithRemaining(remainingTime);
+                }
             });
         }
     });
@@ -1107,6 +1149,56 @@ function startTimer(seconds) {
         
         // Update text
         timerText.textContent = `${remainingSeconds}s`;
+        
+        // Update bar width
+        timerFill.style.width = `${percentage}%`;
+        
+        // Change color based on time remaining
+        timerFill.classList.remove('warning', 'critical');
+        if (percentage <= 33) {
+            timerFill.classList.add('critical');
+        } else if (percentage <= 66) {
+            timerFill.classList.add('warning');
+        }
+        
+        // Stop when time is up
+        if (remaining <= 0) {
+            stopTimer();
+        }
+    }
+    
+    updateTimer();
+    timerInterval = setInterval(updateTimer, 100);
+}
+
+// Start timer with specific remaining seconds (for syncing players who join mid-round)
+function startTimerWithRemaining(remainingSeconds) {
+    stopTimer(); // Clear any existing timer
+    
+    // Play level BGM when timer starts
+    if (window.playLevelBGM) {
+        window.playLevelBGM();
+    }
+    
+    const timerContainer = document.getElementById('timerContainer');
+    const timerText = document.getElementById('timerText');
+    const timerFill = document.getElementById('timerFill');
+    
+    if (!timerContainer) return;
+    
+    timerContainer.style.display = 'block';
+    timerStartTime = Date.now();
+    const totalDuration = remainingSeconds * 1000;
+    const duration = totalDuration;
+    
+    function updateTimer() {
+        const elapsed = Date.now() - timerStartTime;
+        const remaining = Math.max(0, duration - elapsed);
+        const remainingSecondsDisplay = Math.ceil(remaining / 1000);
+        const percentage = (remaining / duration) * 100;
+        
+        // Update text
+        timerText.textContent = `${remainingSecondsDisplay}s`;
         
         // Update bar width
         timerFill.style.width = `${percentage}%`;
