@@ -760,6 +760,11 @@ function createRoom() {
     
     playerName = name;
     
+    // Sync player name with client logger
+    if (window.clientLogger) {
+        window.clientLogger.setPlayerName(name);
+    }
+    
     // Initialize socket and wait for connection
     if (!socket || !socket.connected) {
         initializeSocket();

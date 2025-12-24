@@ -269,53 +269,38 @@
     </div>
 
     <script>
+        // This page displays logs managed by server_log.js (server-side module)
+        // Communication flow: server_log.js → /api/logs-html endpoint → server.html display
+        
         const MAX_LINES = 1000;
         let allLogs = [];
         let filteredLogs = [];
-        let socket = null;
 
-        function initSocket() {
-            const serverUrl = window.location.origin;
+        function loadLogs() {
+            setStatusConnected();
             
-            // Check if Socket.IO is available
-            if (typeof io === 'undefined') {
-                const script = document.createElement('script');
-                script.src = '/socket.io/socket.io.js';
-                script.onload = () => {
-                    connectSocket();
-                };
-                script.onerror = () => {
-                    addLog('Failed to load Socket.IO', 'error');
+            // Fetch and insert HTML logs directly from server (server-managed via server_log.js)
+            fetch('/api/logs-html')
+                .then(response => response.text())
+                .then(html => {
+                    const consoleDiv = document.getElementById('console');
+                    if (html.trim()) {
+                        // Insert the HTML directly from server_log.js
+                        consoleDiv.innerHTML = html;
+                        // Count the lines
+                        const lines = consoleDiv.querySelectorAll('.console-line');
+                        document.getElementById('lineCount').textContent = lines.length;
+                    } else {
+                        consoleDiv.innerHTML = '<div class="console-line info"><span class="timestamp">[--:--:--]</span><span class="log-type">INFO</span><span class="message">No logs yet</span></div>';
+                        document.getElementById('lineCount').textContent = '1';
+                    }
+                    scrollToBottom();
+                })
+                .catch(error => {
+                    const consoleDiv = document.getElementById('console');
+                    consoleDiv.innerHTML = `<div class="console-line error"><span class="timestamp">[--:--:--]</span><span class="log-type">ERROR</span><span class="message">Error loading logs: ${escapeHtml(error.message)}</span></div>`;
                     setStatusDisconnected();
-                };
-                document.head.appendChild(script);
-            } else {
-                connectSocket();
-            }
-        }
-
-        function connectSocket() {
-            const serverUrl = window.location.origin;
-            socket = io(serverUrl);
-
-            socket.on('connect', () => {
-                setStatusConnected();
-                addLog('✓ Connected to server', 'success');
-                socket.emit('subscribeToLogs');
-            });
-
-            socket.on('disconnect', () => {
-                setStatusDisconnected();
-                addLog('✗ Disconnected from server', 'error');
-            });
-
-            socket.on('serverLog', (data) => {
-                addLog(data.message, data.type || 'log', data.timestamp);
-            });
-
-            socket.on('error', (error) => {
-                addLog(`Error: ${error}`, 'error');
-            });
+                });
         }
 
         function addLog(message, type = 'log', timestamp = null) {
@@ -443,8 +428,7 @@
 
         // Initialize on page load
         window.addEventListener('load', () => {
-            addLog('Server Console Initialized', 'info');
-            initSocket();
+            loadLogs();
         });
 
         // Auto-scroll to bottom when new content is added
@@ -454,5 +438,6 @@
         });
         observer.observe(consoleDiv, { childList: true });
     </script>
+    <script src="script/server_display.js"></script>
 </body>
 </html>

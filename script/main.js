@@ -1257,76 +1257,70 @@ async function handleAnswerSelection(selectedRow, selectedIndex, correctAnswer, 
         row.style.opacity = '0.7';
     });
     
-    try {
-        // Get all option texts for verification
-        const allOptions = Array.from(rows).map(row => 
-            row.querySelector('.option-text').textContent
-        );
-        
-        // Send to server for AI verification
-        const response = await fetch(window.location.origin + '/checkAnswer', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({ 
-                question: question,
-                selectedAnswer: selectedAnswer,
-                allOptions: allOptions,
-                correctAnswerIndex: correctAnswer  // Pass the correct answer index from parsed XML
-            }),
-        });
-        
-        const result = await response.json();
-        const isCorrect = result.isCorrect;
-        const correctAnswerIndex = result.correctAnswerIndex;
-        
-        console.log('[Singleplayer] STEP 8: AI verification complete - Correct: ' + isCorrect);
-        
-        // Play sound effect based on result
-        if (isCorrect) {
-            playCorrectSound();
-        } else {
-            playWrongSound();
+    let isCorrect;
+    let correctAnswerIndex;
+    
+    // Check if current subject is Cantonese - skip verification and mark as correct
+    if (currentSubject === '粵語') {
+        console.log('[Singleplayer] Cantonese category detected - skipping answer verification');
+        isCorrect = true;
+        correctAnswerIndex = correctAnswer;
+    } else {
+        try {
+            // Get all option texts for verification
+            const allOptions = Array.from(rows).map(row => 
+                row.querySelector('.option-text').textContent
+            );
+            
+            // Send to server for AI verification
+            const response = await fetch(window.location.origin + '/checkAnswer', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ 
+                    question: question,
+                    selectedAnswer: selectedAnswer,
+                    allOptions: allOptions,
+                    correctAnswerIndex: correctAnswer  // Pass the correct answer index from parsed XML
+                }),
+            });
+            
+            const result = await response.json();
+            isCorrect = result.isCorrect;
+            correctAnswerIndex = result.correctAnswerIndex;
+            
+            console.log('[Singleplayer] STEP 8: AI verification complete - Correct: ' + isCorrect);
+        } catch (error) {
+            console.error('[Singleplayer] Error checking answer:', error);
+            
+            // Fallback: use parsed correctAnswer if available
+            isCorrect = (selectedIndex === correctAnswer);
+            correctAnswerIndex = correctAnswer;
         }
-        
-        // Highlight answers - show what was selected and what was correct
-        rows.forEach((row, index) => {
-            row.style.pointerEvents = 'none';
-            
-            // Show correct answer in green
-            if (index === correctAnswerIndex) {
-                row.classList.add('correct');
-            }
-            
-            // Show selected answer (red if wrong)
-            if (index === selectedIndex && !isCorrect) {
-                row.classList.add('incorrect');
-            }
-        });
-        
-    } catch (error) {
-        console.error('[Singleplayer] Error checking answer:', error);
-        
-        // Fallback: use parsed correctAnswer if available
-        const fallbackCorrect = (selectedIndex === correctAnswer);
-        
-        if (fallbackCorrect) {
-            playCorrectSound();
-        } else {
-            playWrongSound();
-        }
-        
-        rows.forEach((row, index) => {
-            row.style.pointerEvents = 'none';
-            
-            if (index === correctAnswer) {
-                row.classList.add('correct');
-            } else if (index === selectedIndex && !fallbackCorrect) {
-                row.classList.add('incorrect');
-            }
-        });
     }
+    
+    // Play sound effect based on result
+    if (isCorrect) {
+        playCorrectSound();
+    } else {
+        playWrongSound();
+    }
+    
+    // Highlight answers - show what was selected and what was correct
+    rows.forEach((row, index) => {
+        row.style.pointerEvents = 'none';
+        
+        // Show correct answer in green
+        if (index === correctAnswerIndex) {
+            row.classList.add('correct');
+        }
+        
+        // Show selected answer (red if wrong)
+        if (index === selectedIndex && !isCorrect) {
+            row.classList.add('incorrect');
+        }
+    });
     
     // Add action buttons after answer is revealed
     const quizContainer = table.closest('.quiz-container');

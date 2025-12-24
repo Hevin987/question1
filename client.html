@@ -230,7 +230,82 @@
             flex-shrink: 0;
         }
 
+        .footer {
+            background: #0a0a0a;
+            border-top: 1px solid #333;
+            padding: 8px 16px;
+            font-size: 11px;
+            color: #666;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-shrink: 0;
+        }
+
         .line-count {
+            color: #00ff00;
+        }
+
+        /* Player console styles */
+        .player-console-section {
+            border-top: 2px solid #333;
+            padding: 12px 16px;
+            background: #0a0a0a;
+            flex-shrink: 0;
+        }
+
+        .player-console-title {
+            color: #00ff00;
+            font-size: 12px;
+            font-weight: bold;
+            margin-bottom: 8px;
+        }
+
+        .player-id-input {
+            display: flex;
+            gap: 8px;
+            margin-bottom: 8px;
+        }
+
+        .player-id-input input {
+            flex: 1;
+            background: #2a2a2a;
+            color: #00ff00;
+            border: 1px solid #00ff00;
+            padding: 6px 10px;
+            border-radius: 3px;
+            font-family: 'Courier New', monospace;
+            font-size: 12px;
+            outline: none;
+        }
+
+        .player-id-input input:focus {
+            border-color: #00cc00;
+            box-shadow: 0 0 8px rgba(0, 255, 0, 0.2);
+        }
+
+        .player-id-input button {
+            background: #0066ff;
+            color: white;
+            border: none;
+            padding: 6px 12px;
+            border-radius: 3px;
+            cursor: pointer;
+            font-size: 11px;
+            font-weight: bold;
+        }
+
+        .player-id-input button:active {
+            transform: scale(0.95);
+        }
+
+        .player-console-info {
+            font-size: 11px;
+            color: #666;
+            margin-bottom: 8px;
+        }
+
+        .player-console-info.active {
             color: #00ff00;
         }
     </style>
@@ -246,6 +321,21 @@
 
         <div class="console-container" id="console">
             <div class="console-line log"><span class="console-line-prefix">&gt;</span>Client Console Ready</div>
+        </div>
+
+        <div class="player-console-section">
+            <div class="player-console-title">📊 Player Console Viewer</div>
+            <div class="player-id-input">
+                <input 
+                    type="text" 
+                    id="playerNameInput" 
+                    placeholder="Enter Player Name (e.g., PlayerABC)" 
+                    autocomplete="off"
+                >
+                <button onclick="loadPlayerConsole()">Load</button>
+                <button onclick="listPlayers()" title="List all connected players">List</button>
+            </div>
+            <div class="player-console-info" id="playerConsoleInfo">No player selected</div>
         </div>
 
         <div class="input-area">
@@ -316,24 +406,50 @@
             
             if (!command) return;
             
-            // Log the command
-            log(command, 'input');
+            // Display the command (with > prompt like browser console)
+            log(`> ${command}`, 'input');
+            
+            // Log to client logger (sent)
+            if (window.clientLogger) {
+                window.clientLogger.logSent(command);
+            }
             
             // Add to history
             commandHistory.push(command);
             historyIndex = -1;
             
-            // Execute
+            // Execute command and capture all console output
             try {
-                // Create a safe eval context
-                const result = eval(command);
+                // Create a safe eval context with access to window
+                const result = eval(`(function() { return ${command}; })()`);
                 
-                // Log result
-                if (result !== undefined) {
-                    log(String(result), 'output');
+                // Display result (like browser console)
+                if (result !== undefined && result !== null) {
+                    const resultStr = typeof result === 'object' ? JSON.stringify(result, null, 2) : String(result);
+                    log(resultStr, 'output');
+                    
+                    // Log execution result to client logger
+                    if (window.clientLogger) {
+                        window.clientLogger.logCodeExecution(command, result);
+                    }
+                } else if (result === undefined) {
+                    // Browser console shows undefined for undefined results
+                    log('undefined', 'output');
+                    
+                    if (window.clientLogger) {
+                        window.clientLogger.logCodeExecution(command, undefined);
+                    }
                 }
             } catch (error) {
-                log(`Error: ${error.message}`, 'error');
+                // Display error (like browser console)
+                const errorMsg = `Uncaught ${error.name}: ${error.message}`;
+                log(errorMsg, 'error');
+                
+                // Log error to client logger
+                if (window.clientLogger) {
+                    window.clientLogger.logError(`Execution error: ${error.message}`);
+                    window.clientLogger.logCodeExecution(command, null, error.message);
+                }
             }
             
             // Clear input
@@ -380,22 +496,30 @@
 
         console.log = function(...args) {
             originalLog(...args);
-            log(args.map(a => String(a)).join(' '), 'log');
+            const message = args.map(a => String(a)).join(' ');
+            log(message, 'log');
+            window.clientLogger.addLog(`[console.log] ${message}`, 'log', 'internal');
         };
 
         console.error = function(...args) {
             originalError(...args);
-            log(args.map(a => String(a)).join(' '), 'error');
+            const message = args.map(a => String(a)).join(' ');
+            log(message, 'error');
+            window.clientLogger.addLog(`[console.error] ${message}`, 'error', 'internal');
         };
 
         console.warn = function(...args) {
             originalWarn(...args);
-            log(args.map(a => String(a)).join(' '), 'warn');
+            const message = args.map(a => String(a)).join(' ');
+            log(message, 'warn');
+            window.clientLogger.addLog(`[console.warn] ${message}`, 'warn', 'internal');
         };
 
         console.info = function(...args) {
             originalInfo(...args);
-            log(args.map(a => String(a)).join(' '), 'info');
+            const message = args.map(a => String(a)).join(' ');
+            log(message, 'info');
+            window.clientLogger.addLog(`[console.info] ${message}`, 'info', 'internal');
         };
 
         // Focus input on load
@@ -409,6 +533,101 @@
         input.addEventListener('touchstart', () => {
             document.body.style.zoom = 1;
         });
+
+        // Player Console Viewer Functions
+        let currentPlayerIdViewing = null;
+        let playerConsoleRefreshInterval = null;
+
+        async function loadPlayerConsole() {
+            const playerName = document.getElementById('playerNameInput').value.trim();
+            if (!playerName) {
+                log('Please enter a Player Name', 'error');
+                return;
+            }
+
+            currentPlayerIdViewing = playerName;
+            log(`Loading console for player: ${playerName}...`, 'info');
+
+            try {
+                const response = await fetch(`/api/client-logs/${playerName}`);
+                const data = await response.json();
+
+                if (data.logs && data.logs.length > 0) {
+                    log(`✓ Loaded ${data.count} logs from player ${playerName}`, 'success');
+                    document.getElementById('playerConsoleInfo').textContent = `👤 ${playerName} - ${data.count} logs (${data.total} total)`;
+                    document.getElementById('playerConsoleInfo').classList.add('active');
+
+                    // Display player logs
+                    data.logs.forEach(logEntry => {
+                        const logType = logEntry.direction === 'sent' ? 'output' : 
+                                       logEntry.direction === 'received' ? 'input' : logEntry.type;
+                        log(logEntry.message, logType);
+                    });
+
+                    // Auto-refresh every 1 second
+                    if (playerConsoleRefreshInterval) {
+                        clearInterval(playerConsoleRefreshInterval);
+                    }
+                    playerConsoleRefreshInterval = setInterval(() => {
+                        refreshPlayerConsole(playerName);
+                    }, 1000);
+                } else {
+                    log(`No logs found for player: ${playerName}`, 'warn');
+                    document.getElementById('playerConsoleInfo').textContent = `👤 ${playerName} - No logs yet`;
+                }
+            } catch (error) {
+                log(`Error loading player logs: ${error.message}`, 'error');
+            }
+        }
+
+        async function refreshPlayerConsole(playerName) {
+            try {
+                const response = await fetch(`/api/client-logs/${playerName}?limit=100`);
+                const data = await response.json();
+
+                if (data.logs && data.logs.length > 0) {
+                    document.getElementById('playerConsoleInfo').textContent = `👤 ${playerName} - ${data.count} logs (${data.total} total)`;
+                }
+            } catch (error) {
+                // Silently fail on refresh
+            }
+        }
+
+        async function listPlayers() {
+            log('Fetching connected players...', 'info');
+            try {
+                const response = await fetch('/api/client-logs-list');
+                const data = await response.json();
+
+                if (data.players.length > 0) {
+                    log(`📋 Connected Players (${data.total}):`, 'info');
+                    data.players.forEach(player => {
+                        log(`  • ${player.playerName} - ${player.logCount} logs (Updated: ${new Date(player.lastUpdated).toLocaleTimeString()})`, 'log');
+                    });
+                } else {
+                    log('No connected players found', 'warn');
+                }
+            } catch (error) {
+                log(`Error fetching player list: ${error.message}`, 'error');
+            }
+        }
+
+        // Load player name from localStorage if available
+        window.addEventListener('load', () => {
+            document.getElementById('commandInput').focus();
+            log('Type commands to execute', 'info');
+
+            // Try to load stored player name
+            const storedPlayerName = localStorage.getItem('clientPlayerName');
+            if (storedPlayerName) {
+                document.getElementById('playerNameInput').value = storedPlayerName;
+            }
+        });
     </script>
+
+    <!-- Include game scripts for console access -->
+    <script src="script/main.js"></script>
+    <script src="script/multiplayer.js"></script>
+    <script src="script/client_log.js"></script>
 </body>
 </html>

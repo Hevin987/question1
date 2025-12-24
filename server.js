@@ -4,6 +4,7 @@ import dotenv from 'dotenv';
 import { OpenAI } from 'openai';
 import { createServer } from 'http';
 import { Server } from 'socket.io';
+import ServerLogger from './script/server_log.js';
 
 dotenv.config();
 
@@ -21,6 +22,13 @@ app.use(cors());
 app.use(express.json());
 app.use(express.static('.'));
 
+// Initialize server logger
+const serverLogger = new ServerLogger();
+serverLogger.addLog('🚀 Server started', 'success');
+
+// Initialize client logs storage
+const clientLogs = new Map(); // playerId -> { logs: [], lastUpdated: timestamp }
+
 // Initialize OpenAI client with Hugging Face router
 const client = new OpenAI({
     baseURL: "https://router.huggingface.co/v1",
@@ -34,20 +42,19 @@ const AI_MODEL = "deepseek-ai/DeepSeek-V3.2";
 const rooms = new Map(); // roomId -> { players: [], currentQuestion: {}, scores: {}, mode: 'collab'/'compete' }
 const playerRooms = new Map(); // playerId -> roomId
 
-// Store connected clients for server logs
-let logSubscribers = new Set();
-
-// Wrapper function to broadcast logs to HTML console
+// Wrapper function for server logs
 function broadcastLog(message, type = 'log') {
     const logMessage = typeof message === 'string' ? message : JSON.stringify(message);
-    console.log(logMessage);
-    logSubscribers.forEach(socket => {
-        socket.emit('serverLog', {
+    serverLogger.addLog(logMessage, type);
+    
+    // Broadcast to all connected clients via Socket.io
+    if (io) {
+        io.emit('serverLog', {
             message: logMessage,
-            type: type,
+            level: type,
             timestamp: new Date()
         });
-    });
+    }
 }
 
 // Generate room code
@@ -218,6 +225,80 @@ app.post('/checkAnswer', async (req, res) => {
             details: error.message 
         });
     }
+});
+
+// ============================================================================
+// SERVE LOGS ENDPOINT - Returns generated HTML with all logs
+// ============================================================================
+app.get('/api/logs-html', (req, res) => {
+    res.setHeader('Content-Type', 'text/html; charset=utf-8');
+    res.send(serverLogger.getLogsHtml());
+});
+
+// ============================================================================
+// SERVE LOGS ENDPOINT - Returns logs as JSON
+// ============================================================================
+app.get('/api/logs', (req, res) => {
+    const logs = serverLogger.logs || [];
+    const since = req.query.since ? parseInt(req.query.since) : 0;
+    
+    // Filter logs by timestamp if 'since' parameter provided
+    const filteredLogs = since > 0 
+        ? logs.filter(log => new Date(log.timestamp).getTime() > since)
+        : logs;
+    
+    res.json(filteredLogs);
+});
+
+// ============================================================================
+// CLIENT LOGS ENDPOINTS - For client.html to fetch and store player logs
+// ============================================================================
+app.post('/api/client-logs', (req, res) => {
+    const { playerName, logs } = req.body;
+    if (!playerName) {
+        return res.status(400).json({ error: 'Missing playerName' });
+    }
+    
+    // Store or update client logs
+    clientLogs.set(playerName, {
+        logs: logs || [],
+        lastUpdated: new Date().toISOString()
+    });
+    
+    res.json({ success: true, stored: logs ? logs.length : 0 });
+});
+
+app.get('/api/client-logs/:playerName', (req, res) => {
+    const { playerName } = req.params;
+    const playerData = clientLogs.get(playerName);
+    
+    if (!playerData) {
+        return res.json({ logs: [], playerName: playerName, count: 0 });
+    }
+    
+    const limit = req.query.limit ? parseInt(req.query.limit) : 500;
+    const logs = playerData.logs.slice(-limit);
+    
+    res.json({
+        playerName: playerName,
+        logs: logs,
+        count: logs.length,
+        total: playerData.logs.length,
+        lastUpdated: playerData.lastUpdated
+    });
+});
+
+app.get('/api/client-logs-list', (req, res) => {
+    const players = Array.from(clientLogs.entries()).map(([playerName, data]) => ({
+        playerName: playerName,
+        logCount: data.logs.length,
+        lastUpdated: data.lastUpdated
+    }));
+    
+    res.json({
+        players: players,
+        total: players.length
+    });
 });
 
 // WebSocket connection handling
@@ -827,17 +908,9 @@ io.on('connection', (socket) => {
             broadcastLog(`[Collab] Game over in room ${roomCode} due to wrong answer by ${playerName}`);
         });
     
-    // Add this socket to log subscribers so it receives server logs
-    logSubscribers.add(socket);
-    
-    // Handle explicit log subscription (client can subscribe to logs)
-    socket.on('subscribeToLogs', () => {
-        logSubscribers.add(socket);
-    });
-    
-    // Remove from subscribers when disconnecting
+    // Handle disconnect
     socket.once('disconnect', () => {
-        logSubscribers.delete(socket);
+        // Clean up player rooms
     });
     
     broadcastLog('Player connected: ' + socket.id);
@@ -1102,15 +1175,31 @@ io.on('connection', (socket) => {
                 // Show AI checking overlay to all players
                 io.to(roomCode).emit('aiCheckingStart');
                 
-                // Use AI-verified answer from question generation (no additional AI call needed)
-                if (room.parsedQuestionData) {
-                    room.correctAnswer = room.parsedQuestionData.answer;
-                    // If all options are wrong, default to first option
-                    if (room.correctAnswer === -1) {
-                        broadcastLog('[Timer] Warning: All options are wrong, defaulting to option 0');
-                        room.correctAnswer = 0;
+                let correctAnswerToUse = -1;
+                
+                // Check if current subject is Cantonese - skip verification and mark all answers as correct
+                if (room.subject === '粵語') {
+                    broadcastLog('[Timer] Cantonese category detected - skipping verification');
+                    // For Cantonese, mark the first answer received as correct (or first player's answer if no answers yet)
+                    if (room.answers.size > 0) {
+                        const firstAnswer = Array.from(room.answers.values())[0];
+                        correctAnswerToUse = firstAnswer.selectedIndex;
+                    } else {
+                        correctAnswerToUse = 0; // Default to first option if no answers
+                    }
+                } else {
+                    // Use AI-verified answer from question generation (no additional AI call needed)
+                    if (room.parsedQuestionData) {
+                        correctAnswerToUse = room.parsedQuestionData.answer;
+                        // If all options are wrong, default to first option
+                        if (correctAnswerToUse === -1) {
+                            broadcastLog('[Timer] Warning: All options are wrong, defaulting to option 0');
+                            correctAnswerToUse = 0;
+                        }
                     }
                 }
+                
+                room.correctAnswer = correctAnswerToUse;
                 
                 // Calculate isCorrect for each answer and update scores
                 const playerAnswers = Array.from(room.answers.values()).map(a => {
@@ -1204,9 +1293,18 @@ io.on('connection', (socket) => {
             
             // Use AI-verified answer from question generation (no additional AI call needed)
             broadcastLog('[AI Verification] Using pre-verified answer from question generation...');
-            if (room.parsedQuestionData) {
-                room.correctAnswer = room.parsedQuestionData.answer;
+            
+            let correctAnswerToUse = -1;
+            
+            // Check if current subject is Cantonese - skip verification and use selected answer as correct
+            if (room.subject === '粵語') {
+                broadcastLog('[AI Verification] Cantonese category detected - skipping verification, marking answer as correct');
+                correctAnswerToUse = answer;
+            } else if (room.parsedQuestionData) {
+                correctAnswerToUse = room.parsedQuestionData.answer;
             }
+            
+            room.correctAnswer = correctAnswerToUse;
             
             // Calculate isCorrect for each answer and update scores
             const playerAnswers = Array.from(room.answers.values()).map(a => {
