@@ -194,7 +194,7 @@ app.post('/chat', async (req, res) => {
 // ============================================================================
 app.post('/checkAnswer', async (req, res) => {
     try {
-        const { question, selectedAnswer, allOptions, correctAnswerIndex } = req.body;
+        const { question, selectedAnswer, allOptions, correctAnswerIndex, subject } = req.body;
         
         if (!question || !selectedAnswer || !allOptions || correctAnswerIndex === undefined) {
             return res.status(400).json({ error: 'Missing required fields' });
@@ -204,6 +204,17 @@ app.post('/checkAnswer', async (req, res) => {
         broadcastLog(`Question: "${question.substring(0, 60)}..."`);
         broadcastLog(`Selected: "${selectedAnswer}" (Index: ${allOptions.indexOf(selectedAnswer)})`);
         broadcastLog(`Correct: "${allOptions[correctAnswerIndex]}" (Index: ${correctAnswerIndex})`);
+        
+        // Check if subject is Cantonese - skip verification and mark as correct
+        if (subject === '粵語' || subject === 'Cantonese') {
+            broadcastLog('[Cantonese] Skipping answer verification - marking as correct');
+            const selectedIndex = allOptions.indexOf(selectedAnswer);
+            return res.json({ 
+                isCorrect: true,  // Always correct for Cantonese
+                correctAnswerIndex: selectedIndex,  // User's selected answer is the correct one
+                selectedIndex: selectedIndex
+            });
+        }
         
         // STEP 7-8: Compare indices directly (answer already verified during question generation)
         const selectedIndex = allOptions.indexOf(selectedAnswer);

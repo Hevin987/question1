@@ -1260,11 +1260,14 @@ async function handleAnswerSelection(selectedRow, selectedIndex, correctAnswer, 
     let isCorrect;
     let correctAnswerIndex;
     
+    console.log('[Singleplayer] Current subject:', currentSubject);
+    console.log('[Singleplayer] Is Cantonese check:', currentSubject === '粵語', 'Subject value:', typeof currentSubject, currentSubject.length);
+    
     // Check if current subject is Cantonese - skip verification and mark as correct
-    if (currentSubject === '粵語') {
+    if (currentSubject === '粵語' || currentSubject === 'Cantonese') {
         console.log('[Singleplayer] Cantonese category detected - skipping answer verification');
         isCorrect = true;
-        correctAnswerIndex = correctAnswer;
+        correctAnswerIndex = selectedIndex; // Mark the selected answer as correct for Cantonese
     } else {
         try {
             // Get all option texts for verification
@@ -1282,7 +1285,8 @@ async function handleAnswerSelection(selectedRow, selectedIndex, correctAnswer, 
                     question: question,
                     selectedAnswer: selectedAnswer,
                     allOptions: allOptions,
-                    correctAnswerIndex: correctAnswer  // Pass the correct answer index from parsed XML
+                    correctAnswerIndex: correctAnswer,  // Pass the correct answer index from parsed XML
+                    subject: currentSubject  // Pass subject for server-side Cantonese check
                 }),
             });
             
