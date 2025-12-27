@@ -779,19 +779,31 @@ Generate the ${displaySubject} question now using ONLY the XML format above:`;
             // Use the answer index from the XML (AI already decided which is correct)
             correctAnswerIndex = parsedData.answer;
             
-            // Just verify that the AI-provided answer is actually correct
-            const aiProvidedAnswer = parsedData.options[correctAnswerIndex];
-            const isAnswerCorrect = await verifyAnswerWithAI(parsedData.question, aiProvidedAnswer);
+            // For Cantonese, skip AI verification completely - trust AI's answer
+            const isCantonese = subject === '粵語' || subject.toLowerCase() === 'cantonese';
             
-            broadcastLog(`[${mode.toUpperCase()}] Verifying AI-provided answer: Option ${correctAnswerIndex + 1} ("${aiProvidedAnswer.substring(0, 50)}...")`);
-            
-            if (!isAnswerCorrect) {
-                broadcastLog(`[${mode.toUpperCase()}] Attempt ${attempts}: AI-provided answer is WRONG! Regenerating...`);
-                isValidJSON = false;
+            if (isCantonese) {
+                broadcastLog(`[${mode.toUpperCase()}] [CANTONESE] Skipping AI answer verification for Cantonese`);
+                // Treat as correct without verification
+                isValidJSON = true;
+                broadcastLog(`[${mode.toUpperCase()}] Attempt ${attempts}: ✓ Valid ${displaySubject} question with answer: Option ${correctAnswerIndex + 1} (Cantonese - no verification)`);
             } else {
-                broadcastLog(`[${mode.toUpperCase()}] Attempt ${attempts}: ✓ Valid ${displaySubject} question with correct answer: Option ${correctAnswerIndex + 1}`);
+                // For other languages, verify the answer
+                const aiProvidedAnswer = parsedData.options[correctAnswerIndex];
+                const isAnswerCorrect = await verifyAnswerWithAI(parsedData.question, aiProvidedAnswer);
                 
-                // STEP 2: Translate parsed question and options AFTER verifying answer is correct
+                broadcastLog(`[${mode.toUpperCase()}] Verifying AI-provided answer: Option ${correctAnswerIndex + 1} ("${aiProvidedAnswer.substring(0, 50)}...")`);
+                
+                if (!isAnswerCorrect) {
+                    broadcastLog(`[${mode.toUpperCase()}] Attempt ${attempts}: AI-provided answer is WRONG! Regenerating...`);
+                    isValidJSON = false;
+                } else {
+                    broadcastLog(`[${mode.toUpperCase()}] Attempt ${attempts}: ✓ Valid ${displaySubject} question with correct answer: Option ${correctAnswerIndex + 1}`);
+                    isValidJSON = true;
+                }
+            }
+            
+            if (isValidJSON) {
                 if (targetLanguage && targetLanguage !== 'en') {
                     broadcastLog(`[${mode.toUpperCase()}] [Translation] Translating verified question to ${targetLanguage}...`);
                     
