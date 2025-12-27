@@ -123,48 +123,74 @@ window.clientLogger = new ClientLogger();
     const originalError = console.error;
     const originalDebug = console.debug;
     
+    // Helper function to safely stringify objects with circular references
+    function safeStringify(arg) {
+        if (typeof arg === 'string') return arg;
+        
+        try {
+            // Try normal stringify first
+            return JSON.stringify(arg);
+        } catch (e) {
+            // Handle circular references
+            if (e instanceof TypeError && e.message.includes('circular')) {
+                // Get constructor name for identification
+                const constructorName = arg?.constructor?.name || typeof arg;
+                
+                // For Socket objects and other complex objects with circular refs
+                if (constructorName === 'Socket' || constructorName === 'Manager') {
+                    return `[${constructorName} object]`;
+                }
+                
+                // For other objects, try to extract key properties
+                try {
+                    const properties = {};
+                    for (const key in arg) {
+                        if (arg.hasOwnProperty(key) && typeof arg[key] !== 'object') {
+                            properties[key] = arg[key];
+                        }
+                    }
+                    return `[${constructorName}: ${JSON.stringify(properties)}]`;
+                } catch (innerError) {
+                    return `[${constructorName} object with circular reference]`;
+                }
+            }
+            // For other stringify errors, return a safe representation
+            return `[${arg?.constructor?.name || typeof arg} object]`;
+        }
+    }
+    
     // Override console.log
     console.log = function(...args) {
         originalLog.apply(console, args);
-        const message = args.map(arg => 
-            typeof arg === 'string' ? arg : JSON.stringify(arg)
-        ).join(' ');
+        const message = args.map(arg => safeStringify(arg)).join(' ');
         logger.addLog(message, 'log', 'internal');
     };
     
     // Override console.info
     console.info = function(...args) {
         originalInfo.apply(console, args);
-        const message = args.map(arg => 
-            typeof arg === 'string' ? arg : JSON.stringify(arg)
-        ).join(' ');
+        const message = args.map(arg => safeStringify(arg)).join(' ');
         logger.addLog(message, 'info', 'internal');
     };
     
     // Override console.warn
     console.warn = function(...args) {
         originalWarn.apply(console, args);
-        const message = args.map(arg => 
-            typeof arg === 'string' ? arg : JSON.stringify(arg)
-        ).join(' ');
+        const message = args.map(arg => safeStringify(arg)).join(' ');
         logger.addLog(message, 'warn', 'internal');
     };
     
     // Override console.error
     console.error = function(...args) {
         originalError.apply(console, args);
-        const message = args.map(arg => 
-            typeof arg === 'string' ? arg : JSON.stringify(arg)
-        ).join(' ');
+        const message = args.map(arg => safeStringify(arg)).join(' ');
         logger.addLog(message, 'error', 'internal');
     };
     
     // Override console.debug
     console.debug = function(...args) {
         originalDebug.apply(console, args);
-        const message = args.map(arg => 
-            typeof arg === 'string' ? arg : JSON.stringify(arg)
-        ).join(' ');
+        const message = args.map(arg => safeStringify(arg)).join(' ');
         logger.addLog(message, 'debug', 'internal');
     };
     
