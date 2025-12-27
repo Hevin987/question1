@@ -1,3 +1,4 @@
 DONOTCOMMIT.txt
 logs/server.log
 .env
+.gitignore
