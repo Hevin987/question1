@@ -41,6 +41,7 @@ const AI_MODEL = "deepseek-ai/DeepSeek-V3.2";
 // Multiplayer game state
 const rooms = new Map(); // roomId -> { players: [], currentQuestion: {}, scores: {}, mode: 'collab'/'compete' }
 const playerRooms = new Map(); // playerId -> roomId
+const stopAnswerCheck = new Map(); // roomId -> boolean flag to stop answer checking retries
 
 // Wrapper function for server logs
 function broadcastLog(message, type = 'log') {
@@ -542,10 +543,23 @@ function parseQuizJSON(text) {
 }
 
 // Helper function to verify answer with AI
-async function verifyAnswerWithAI(question, answer) {
-    try {
-        // More detailed and accurate verification prompt
-        const prompt = `Question: "${question}"
+async function verifyAnswerWithAI(question, answer, roomId = null) {
+    let checkAttempts = 0;
+    let lastError = null;
+    
+    while (true) {
+        // Check if answer check has been forcefully stopped for this room
+        if (roomId && stopAnswerCheck.get(roomId)) {
+            broadcastLog(`[AI Checking] Answer check forcefully stopped for room ${roomId}`, 'warn');
+            stopAnswerCheck.delete(roomId);
+            return false; // Return false to stop the checking
+        }
+        
+        checkAttempts++;
+        
+        try {
+            // More detailed and accurate verification prompt
+            const prompt = `Question: "${question}"
 
 Proposed Answer: "${answer}"
 
@@ -557,44 +571,56 @@ Consider:
 - Is it the best/most accurate answer?
 
 Respond with ONLY one word: "YES" if correct, "NO" if incorrect or inaccurate.`;
-        
-        broadcastLog(`[AI Checking] Question: "${question.substring(0, 60)}..."`);
-        broadcastLog(`[AI Checking] Testing answer: "${answer.substring(0, 60)}..."`);
-        
-        const chatCompletion = await client.chat.completions.create({
-            model: AI_MODEL,
-            messages: [{ role: "user", content: prompt }],
-            max_tokens: 20,
-            temperature: 0.1, // Very low temperature for more consistent/accurate responses
-        });
+            
+            broadcastLog(`[AI Checking] Attempt ${checkAttempts}: Question: "${question.substring(0, 60)}..."`);
+            broadcastLog(`[AI Checking] Testing answer: "${answer.substring(0, 60)}..."`);
+            
+            const chatCompletion = await client.chat.completions.create({
+                model: AI_MODEL,
+                messages: [{ role: "user", content: prompt }],
+                max_tokens: 20,
+                temperature: 0.1, // Very low temperature for more consistent/accurate responses
+            });
 
-        const aiResponse = chatCompletion.choices[0].message.content.toLowerCase().trim();
-        broadcastLog('[Original AI Response - Answer Verification]: ' + chatCompletion.choices[0].message.content);
-        broadcastLog(`[AI Response] AI says: "${aiResponse}`);
-        
-        // Check for various yes/no variations
-        const yesVariations = ['yes', 'yeah', 'yep', 'yup', 'correct', 'true', 'right', 'affirmative'];
-        const noVariations = ['no', 'nope', 'nah', 'incorrect', 'false', 'wrong', 'negative'];
-        
-        for (const variation of yesVariations) {
-            if (aiResponse.includes(variation)) {
-                broadcastLog(`[AI Checking] Result: CORRECT (matched "${variation}")`);
-                return true;
+            const aiResponse = chatCompletion.choices[0].message.content.toLowerCase().trim();
+            broadcastLog('[Original AI Response - Answer Verification]: ' + chatCompletion.choices[0].message.content);
+            broadcastLog(`[AI Response] AI says: "${aiResponse}`);
+            
+            // Check for various yes/no variations
+            const yesVariations = ['yes', 'yeah', 'yep', 'yup', 'correct', 'true', 'right', 'affirmative'];
+            const noVariations = ['no', 'nope', 'nah', 'incorrect', 'false', 'wrong', 'negative'];
+            
+            // Check YES variations first (more strictly)
+            for (const variation of yesVariations) {
+                if (aiResponse.includes(variation)) {
+                    broadcastLog(`[AI Checking] Result: CORRECT (matched "${variation}")`);
+                    return true;
+                }
             }
-        }
-        
-        for (const variation of noVariations) {
-            if (aiResponse.includes(variation)) {
-                broadcastLog(`[AI Checking] Result: INCORRECT (matched "${variation}")`);
-                return false;
+            
+            // Check NO variations
+            for (const variation of noVariations) {
+                if (aiResponse.includes(variation)) {
+                    broadcastLog(`[AI Checking] Result: INCORRECT (matched "${variation}")`);
+                    return false;
+                }
             }
+            
+            // If response is unclear/uncertain, retry
+            broadcastLog(`[AI Checking] Attempt ${checkAttempts}: Response unclear: "${aiResponse}"`);
+            
+            broadcastLog(`[AI Checking] Retrying answer check (attempt ${checkAttempts + 1})...`);
+            await new Promise(resolve => setTimeout(resolve, 1000)); // Wait 1 second before retry
+            continue;
+            
+        } catch (error) {
+            lastError = error;
+            broadcastLog(`[AI Checking] Attempt ${checkAttempts}: Error verifying answer: ${error.message}`, 'error');
+            
+            broadcastLog(`[AI Checking] Retrying answer check after error (attempt ${checkAttempts + 1})...`);
+            await new Promise(resolve => setTimeout(resolve, 2000)); // Wait 2 seconds before retry
+            continue;
         }
-        
-        broadcastLog('[AI Checking] Result: UNCERTAIN (defaulting to false)');
-        return false;
-    } catch (error) {
-        broadcastLog('[AI Checking] Error verifying answer with AI: ' + error.message, 'error');
-        return false;
     }
 }
 
@@ -922,6 +948,19 @@ io.on('connection', (socket) => {
     // Handle disconnect
     socket.once('disconnect', () => {
         // Clean up player rooms
+    });
+    
+    // Handle force stop answer check
+    socket.on('forceStopAnswerCheck', ({ roomCode }) => {
+        if (roomCode) {
+            stopAnswerCheck.set(roomCode, true);
+            broadcastLog(`[Force Stop] Answer check stop signal set for room ${roomCode}`, 'warn');
+            
+            // Notify all players in the room that answer checking was stopped
+            io.to(roomCode).emit('answerCheckStopped', {
+                message: 'Answer verification timed out. Returning to game menu...'
+            });
+        }
     });
     
     broadcastLog('Player connected: ' + socket.id);

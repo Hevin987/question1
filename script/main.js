@@ -13,6 +13,7 @@
 // ============================================================================
 
 //command selectRoomSubject('History')
+//socket.emit('forceStopAnswerCheck', { roomCode: currentRoomCode })
 // switchLanguage(useChineseVersion)
 // toggleTheme(useLightMode)
 // Get elements (will be accessed when needed, not immediately)

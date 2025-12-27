@@ -634,6 +634,24 @@ function connectSocket() {
         }
     });
     
+    // Handle answer check stopped
+    socket.on('answerCheckStopped', ({ message }) => {
+        console.log('[Answer Check] Stopped:', message);
+        
+        // Hide AI checking overlay
+        const overlay = document.getElementById('aiCheckingOverlay');
+        if (overlay) {
+            overlay.classList.remove('show');
+        }
+        
+        // Show message and return to appropriate screen
+        addSystemMessage(`⚠️ ${message}`);
+        
+        setTimeout(() => {
+            returnToGameMenuFromAnswerCheck();
+        }, 2000);
+    });
+    
     socket.on('playerContinued', ({ action, playerName: pName, scores }) => {
         console.log('Player continued:', pName, action);
         
@@ -1578,3 +1596,45 @@ window.leaveRoom = leaveRoom;
 window.continueFromScore = continueFromScore;
 window.stopTimer = stopTimer;
 window.hideTimer = hideTimer;
+
+// Force stop answer check and return to game menu
+function returnToGameMenuFromAnswerCheck() {
+    // Hide all game screens
+    const chatContainer = document.getElementById('chatContainer');
+    const levelProgressPage = document.getElementById('levelProgressPage');
+    const scoreScreen = document.getElementById('scoreScreen');
+    
+    if (chatContainer) chatContainer.style.display = 'none';
+    if (levelProgressPage) levelProgressPage.style.display = 'none';
+    if (scoreScreen) scoreScreen.style.display = 'none';
+    
+    // Stop timer
+    hideTimer();
+    
+    // Stop all BGM
+    if (window.stopMainBGM) window.stopMainBGM();
+    if (window.stopLevelBGM) window.stopLevelBGM();
+    if (window.stopLevelFirstBGM) window.stopLevelFirstBGM();
+    if (window.stopLevelUpSound) window.stopLevelUpSound();
+    if (window.stopLevelFailedSound) window.stopLevelFailedSound();
+    
+    // Reset game state
+    currentLevel = 0;
+    levelStatus = Array(12).fill('unanswered');
+    conversationHistory = [];
+    isMultiplayerActive = false;
+    
+    // Clear subject selection
+    const subjectCards = document.querySelectorAll('.waiting-room-page .subject-card');
+    subjectCards.forEach(card => card.classList.remove('selected'));
+    
+    // Return to waiting room
+    document.getElementById('waitingRoomPage').style.display = 'flex';
+    
+    // Play background music
+    if (window.playMainBGM) {
+        window.playMainBGM();
+    }
+}
+
+window.returnToGameMenuFromAnswerCheck = returnToGameMenuFromAnswerCheck;
